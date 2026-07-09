@@ -59,6 +59,7 @@
     <h2>オプション</h2>
     <label class="opt"><input type="checkbox" id="optSpeak" checked> 問題を読み上げる（ハンズフリー用）</label>
     <label class="opt"><input type="checkbox" id="optAuto" checked> 自動で次の問題へ進む</label>
+    <label class="opt"><input type="checkbox" id="optSyn"> 類義語を表示する</label>
   </div>
 
   <div class="card stats" id="statsCard">
@@ -88,6 +89,7 @@
     <div id="heard" class="heard"></div>
     <div id="verdict" class="verdict"></div>
     <div id="qExample" class="q-example"></div>
+    <div id="qSynonyms" class="q-syn"></div>
   </div>
 
   <div class="controls">
@@ -96,7 +98,6 @@
       <button id="skipBtn" class="ctl-btn">⏭ スキップ</button>
     </div>
     <div class="btn-row">
-      <button id="okBtn" class="ctl-btn ok">⭕ 正解にする</button>
       <button id="ngBtn" class="ctl-btn ng">❌ 不正解にする</button>
     </div>
     <div class="btn-row" id="nextRow" style="visibility:hidden">

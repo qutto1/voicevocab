@@ -105,10 +105,11 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 .verdict.ok { color: var(--ok); }
 .verdict.ng { color: var(--ng); }
 .q-example {
-  margin-top: 14px; min-height: 48px;
-  font-size: 17px; line-height: 1.6; color: var(--text);
+  margin-top: 14px; min-height: 56px;
+  font-size: 22px; font-weight: 600; line-height: 1.6; color: var(--text);
 }
-.q-example .ex-ja { color: var(--sub); font-size: 14px; display: block; }
+.q-example .ex-ja { color: var(--sub); font-size: 15px; font-weight: 400; display: block; }
+.q-syn { margin-top: 10px; min-height: 20px; font-size: 14px; color: var(--accent); }
 
 .btn-row { display: flex; gap: 10px; margin-bottom: 10px; }
 .ctl-btn {
@@ -118,7 +119,6 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
   border: none; border-radius: 12px;
 }
 .ctl-btn:active { opacity: .8; }
-.ctl-btn.ok { background: #0e5c3c; }
 .ctl-btn.ng { background: #7a271a; }
 .ctl-btn.next { background: var(--accent); color: #0b1220; font-weight: 700; }
 
@@ -146,8 +146,9 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
   .q-text { font-size: 72px; }
   .q-ipa { font-size: 26px; }
   .verdict { font-size: 38px; }
-  .q-example { font-size: 21px; }
-  .q-example .ex-ja { font-size: 17px; }
+  .q-example { font-size: 28px; }
+  .q-example .ex-ja { font-size: 18px; }
+  .q-syn { font-size: 17px; }
   .heard { font-size: 19px; }
   .controls { max-width: 640px; margin: 0 auto; }
   .ctl-btn { padding: 18px 8px; font-size: 18px; }

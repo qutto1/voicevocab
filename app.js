@@ -8,7 +8,9 @@
 const INTERVALS_DAYS = [0, 1, 3, 7, 14, 30, 60, 120];
 const RELEARN_MS = 10 * 60 * 1000;      // 不正解後の再出題間隔
 const REQUEUE_GAP = 4;                   // セッション内で間違えた問題を何問後に再出題するか
-const WRONG_WAIT_MS = 3000;              // 不正解後、次の問題までの待機時間
+const WRONG_WAIT_MS = 5000;              // 不正解後、次の問題までの待機時間
+const CORRECT_WAIT_MS = 700;             // 正解後、次の問題までの待機時間（通常）
+const CORRECT_WAIT_SYN_MS = 2000;        // 正解後の待機時間（類義語表示オプションON時）
 const PROG_KEY = "vv_progress_v1";
 const SETTINGS_KEY = "vv_settings_v2";   // レベルが5段階(以上指定)になったためv2
 
@@ -217,7 +219,7 @@ function readSettings() {
   const kinds = [...document.querySelectorAll("#kindChips input:checked")].map(i => i.value);
   const mode = document.querySelector("#modeChips input:checked").value;
   const count = +document.querySelector("#countChips input:checked").value;
-  return { level, kinds, mode, count, speakQ: $("optSpeak").checked, auto: $("optAuto").checked };
+  return { level, kinds, mode, count, speakQ: $("optSpeak").checked, auto: $("optAuto").checked, showSyn: $("optSyn").checked };
 }
 function persistSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
 function restoreSettings() {
@@ -230,6 +232,7 @@ function restoreSettings() {
   document.querySelectorAll("#countChips input").forEach(i => i.checked = +i.value === s.count);
   $("optSpeak").checked = s.speakQ !== false;
   $("optAuto").checked = s.auto !== false;
+  $("optSyn").checked = !!s.showSyn;
 }
 
 // ===== 学習状況表示 =====
@@ -305,9 +308,17 @@ function showQuestion(item) {
   const kindLabel = w.k === "w" ? "単語" : "熟語";
   $("qKind").textContent = `${dirLabel}・Lv${w.lv} ${kindLabel}`;
   $("qText").textContent = item.dir === "e2j" ? w.en : w.ja[0];
-  // 英語が見えている出題では発音記号も表示（和→英では答えがバレるので回答後に表示）
-  $("qIpa").textContent = item.dir === "e2j" && w.ipa ? w.ipa : "";
-  $("qExample").innerHTML = "";
+  // 英語(答え)が見えている英→和のみ、出題時点で発音記号・例文・類義語を表示。
+  // 和→英は英語が答えになるため、これらは回答後まで隠す（先に見せると答えが分かってしまう）
+  if (item.dir === "e2j") {
+    $("qIpa").textContent = w.ipa || "";
+    $("qExample").innerHTML = w.ex ? `${escapeHtml(w.ex)}<span class="ex-ja">${escapeHtml(w.exJa || "")}</span>` : "";
+    $("qSynonyms").textContent = session.settings.showSyn && w.syn && w.syn.length ? "類義語: " + w.syn.join(", ") : "";
+  } else {
+    $("qIpa").textContent = "";
+    $("qExample").innerHTML = "";
+    $("qSynonyms").textContent = "";
+  }
   $("heard").textContent = "";
   $("verdict").textContent = "";
   $("verdict").className = "verdict";
@@ -422,7 +433,6 @@ async function handleManual(action, item) {
   if (action === "quit") return "quit";
   if (action === "repeat") return "repeat";
   if (action === "skip") return await finishAnswer(item, false, "（スキップ）");
-  if (action === "ok") return await finishAnswer(item, true, "（手動判定）");
   if (action === "ng") return await finishAnswer(item, false, "（手動判定）");
   return "repeat";
 }
@@ -435,9 +445,12 @@ async function finishAnswer(item, correct, heardText) {
   if (heardText) $("heard").textContent = "🎤 " + heardText;
 
   const answerText = item.dir === "e2j" ? `${w.en} = ${w.ja[0]}` : `${w.ja[0]} = ${w.en}`;
-  // 回答後は発音記号と例文を表示（和→英でもここで英語が判明するのでOK）
-  if (w.ipa) $("qIpa").textContent = w.ipa;
-  if (w.ex) $("qExample").innerHTML = `${escapeHtml(w.ex)}<span class="ex-ja">${escapeHtml(w.exJa || "")}</span>`;
+  // 和→英はここで初めて英語が判明するので、回答後に発音記号・例文・類義語を表示する
+  if (item.dir === "j2e") {
+    if (w.ipa) $("qIpa").textContent = w.ipa;
+    if (w.ex) $("qExample").innerHTML = `${escapeHtml(w.ex)}<span class="ex-ja">${escapeHtml(w.exJa || "")}</span>`;
+    if (s.showSyn && w.syn && w.syn.length) $("qSynonyms").textContent = "類義語: " + w.syn.join(", ");
+  }
 
   if (correct) {
     v.textContent = "⭕ 正解！";
@@ -457,7 +470,8 @@ async function finishAnswer(item, correct, heardText) {
   if (!session.active) return "quit";
 
   if (s.auto) {
-    await new Promise(r => setTimeout(r, correct ? 700 : WRONG_WAIT_MS));
+    const wait = correct ? (s.showSyn ? CORRECT_WAIT_SYN_MS : CORRECT_WAIT_MS) : WRONG_WAIT_MS;
+    await new Promise(r => setTimeout(r, wait));
   } else {
     $("nextRow").style.visibility = "visible";
     const res = await waitManual();
@@ -500,7 +514,6 @@ $("startBtn").addEventListener("click", startSession);
 $("quitBtn").addEventListener("click", () => manualAction("quit") || (session.active && endSession()));
 $("repeatBtn").addEventListener("click", () => manualAction("repeat"));
 $("skipBtn").addEventListener("click", () => manualAction("skip"));
-$("okBtn").addEventListener("click", () => manualAction("ok"));
 $("ngBtn").addEventListener("click", () => manualAction("ng"));
 $("nextBtn").addEventListener("click", () => manualAction("next"));
 $("backBtn").addEventListener("click", () => { renderStats(); showScreen("setup"); });
