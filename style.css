@@ -31,6 +31,7 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
   margin-bottom: 14px;
 }
 .card h2 { font-size: 13px; color: var(--sub); margin-bottom: 10px; font-weight: 600; }
+.hint { color: var(--sub); font-size: 12px; margin-top: 10px; line-height: 1.5; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { position: relative; }
@@ -59,6 +60,16 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 }
 .big-btn:active { opacity: .8; }
 
+.sub-btn {
+  display: block; width: 100%;
+  padding: 14px;
+  font-size: 16px; font-weight: 600;
+  background: #344054; color: var(--text);
+  border: none; border-radius: 14px;
+  margin-top: 12px;
+}
+.sub-btn:active { opacity: .8; }
+
 .note { color: var(--sub); font-size: 12px; text-align: center; margin-top: 12px; }
 
 .stats #statsBody { font-size: 14px; line-height: 1.8; color: var(--text); }
@@ -73,11 +84,15 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
   border: none; border-radius: 8px; padding: 8px 14px; font-size: 14px;
 }
 
-.q-area { text-align: center; padding: 10px 0 20px; min-height: 280px; }
+.q-area { text-align: center; padding: 10px 0 20px; min-height: 300px; }
 .q-kind { color: var(--sub); font-size: 13px; margin-bottom: 12px; }
 .q-text {
   font-size: 44px; font-weight: 800; line-height: 1.25;
-  word-break: break-word; margin-bottom: 16px; min-height: 60px;
+  word-break: break-word; margin-bottom: 6px; min-height: 60px;
+}
+.q-ipa {
+  color: var(--accent); font-size: 20px; margin-bottom: 12px; min-height: 26px;
+  font-family: "Segoe UI", "Noto Sans", sans-serif;
 }
 .phase { color: var(--sub); font-size: 15px; min-height: 22px; }
 .mic {
@@ -89,6 +104,11 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 .verdict { font-size: 30px; font-weight: 800; margin-top: 10px; min-height: 44px; }
 .verdict.ok { color: var(--ok); }
 .verdict.ng { color: var(--ng); }
+.q-example {
+  margin-top: 14px; min-height: 48px;
+  font-size: 17px; line-height: 1.6; color: var(--text);
+}
+.q-example .ex-ja { color: var(--sub); font-size: 14px; display: block; }
 
 .btn-row { display: flex; gap: 10px; margin-bottom: 10px; }
 .ctl-btn {
@@ -102,5 +122,35 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 .ctl-btn.ng { background: #7a271a; }
 .ctl-btn.next { background: var(--accent); color: #0b1220; font-weight: 700; }
 
-#resultWrong { font-size: 15px; line-height: 2; }
+#resultWrong, #wrongListBody { font-size: 15px; line-height: 2; }
 #resultSummary { font-size: 17px; line-height: 1.9; }
+.wl-ipa { color: var(--accent); font-size: 13px; }
+.wl-count { color: var(--ng); font-size: 13px; margin-left: 6px; }
+
+/* ===== Galaxy Fold 7 展開時などの広い画面 ===== */
+@media (min-width: 600px) {
+  .screen { max-width: 900px; padding: 28px 32px 48px; }
+
+  /* 設定画面: カードを2列に */
+  .setup-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 18px;
+    align-content: start;
+  }
+  .setup-grid .span2 { grid-column: 1 / -1; }
+  h1 { font-size: 32px; }
+
+  /* 学習画面: 大きく表示 */
+  #session .q-area { padding-top: 30px; min-height: 380px; }
+  .q-text { font-size: 72px; }
+  .q-ipa { font-size: 26px; }
+  .verdict { font-size: 38px; }
+  .q-example { font-size: 21px; }
+  .q-example .ex-ja { font-size: 17px; }
+  .heard { font-size: 19px; }
+  .controls { max-width: 640px; margin: 0 auto; }
+  .ctl-btn { padding: 18px 8px; font-size: 18px; }
+
+  #wrongListBody { column-count: 2; column-gap: 28px; }
+}

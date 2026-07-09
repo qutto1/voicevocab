@@ -12,17 +12,20 @@
 <body>
 
 <!-- ===== 設定画面 ===== -->
-<div id="setup" class="screen">
-  <h1>🎧 VoiceVocab</h1>
-  <p class="sub">声で答える英単語・熟語トレーニング</p>
+<div id="setup" class="screen setup-grid">
+  <h1 class="span2">🎧 VoiceVocab</h1>
+  <p class="sub span2">声で答える英単語・熟語トレーニング</p>
 
   <div class="card">
-    <h2>レベル</h2>
-    <div class="chips" id="levelChips">
-      <label class="chip"><input type="checkbox" value="1" checked><span>Lv1 中学</span></label>
-      <label class="chip"><input type="checkbox" value="2" checked><span>Lv2 高校</span></label>
-      <label class="chip"><input type="checkbox" value="3"><span>Lv3 受験・上級</span></label>
+    <h2>レベル（選んだレベル以上から出題）</h2>
+    <div class="chips radio" id="levelChips">
+      <label class="chip"><input type="radio" name="level" value="1"><span>Lv1〜</span></label>
+      <label class="chip"><input type="radio" name="level" value="2"><span>Lv2〜</span></label>
+      <label class="chip"><input type="radio" name="level" value="3" checked><span>Lv3〜</span></label>
+      <label class="chip"><input type="radio" name="level" value="4"><span>Lv4〜</span></label>
+      <label class="chip"><input type="radio" name="level" value="5"><span>Lv5</span></label>
     </div>
+    <p class="hint">Lv1 中学基礎 ／ Lv2 中学発展 ／ Lv3 高校 ／ Lv4 大学受験 ／ Lv5 上級</p>
   </div>
 
   <div class="card">
@@ -63,8 +66,9 @@
     <div id="statsBody">-</div>
   </div>
 
-  <button id="startBtn" class="big-btn">▶ スタート</button>
-  <p class="note" id="supportNote"></p>
+  <button id="startBtn" class="big-btn span2">▶ スタート</button>
+  <button id="wrongListBtn" class="sub-btn span2">❌ 間違えた問題リスト</button>
+  <p class="note span2" id="supportNote"></p>
 </div>
 
 <!-- ===== 学習画面 ===== -->
@@ -78,24 +82,36 @@
   <div class="q-area">
     <div id="qKind" class="q-kind">英→和・Lv1</div>
     <div id="qText" class="q-text">apple</div>
+    <div id="qIpa" class="q-ipa"></div>
     <div id="phase" class="phase">…</div>
     <div id="micIcon" class="mic hidden">🎤</div>
     <div id="heard" class="heard"></div>
     <div id="verdict" class="verdict"></div>
+    <div id="qExample" class="q-example"></div>
   </div>
 
-  <div class="btn-row">
-    <button id="repeatBtn" class="ctl-btn">🔁 もう一度</button>
-    <button id="skipBtn" class="ctl-btn">⏭ スキップ</button>
+  <div class="controls">
+    <div class="btn-row">
+      <button id="repeatBtn" class="ctl-btn">🔁 もう一度</button>
+      <button id="skipBtn" class="ctl-btn">⏭ スキップ</button>
+    </div>
+    <div class="btn-row">
+      <button id="okBtn" class="ctl-btn ok">⭕ 正解にする</button>
+      <button id="ngBtn" class="ctl-btn ng">❌ 不正解にする</button>
+    </div>
+    <div class="btn-row" id="nextRow" style="visibility:hidden">
+      <button id="nextBtn" class="ctl-btn next">次の問題 ▶</button>
+    </div>
+    <p class="note">音声コマンド: 「スキップ」「もう一度」「終了」</p>
   </div>
-  <div class="btn-row">
-    <button id="okBtn" class="ctl-btn ok">⭕ 正解にする</button>
-    <button id="ngBtn" class="ctl-btn ng">❌ 不正解にする</button>
-  </div>
-  <div class="btn-row" id="nextRow" style="visibility:hidden">
-    <button id="nextBtn" class="ctl-btn next">次の問題 ▶</button>
-  </div>
-  <p class="note">音声コマンド: 「スキップ」「もう一度」「終了」</p>
+</div>
+
+<!-- ===== 間違えた問題リスト画面 ===== -->
+<div id="wrongScreen" class="screen hidden">
+  <h1>❌ 間違えた問題</h1>
+  <p class="sub">間違えた回数が多い順</p>
+  <div class="card"><div id="wrongListBody">-</div></div>
+  <button id="wrongBackBtn" class="big-btn">設定に戻る</button>
 </div>
 
 <!-- ===== 結果画面 ===== -->

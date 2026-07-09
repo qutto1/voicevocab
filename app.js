@@ -8,8 +8,9 @@
 const INTERVALS_DAYS = [0, 1, 3, 7, 14, 30, 60, 120];
 const RELEARN_MS = 10 * 60 * 1000;      // 不正解後の再出題間隔
 const REQUEUE_GAP = 4;                   // セッション内で間違えた問題を何問後に再出題するか
+const WRONG_WAIT_MS = 3000;              // 不正解後、次の問題までの待機時間
 const PROG_KEY = "vv_progress_v1";
-const SETTINGS_KEY = "vv_settings_v1";
+const SETTINGS_KEY = "vv_settings_v2";   // レベルが5段階(以上指定)になったためv2
 
 let progress = {};   // { id: {stage, due, right, wrong} }
 try { progress = JSON.parse(localStorage.getItem(PROG_KEY)) || {}; } catch (e) { progress = {}; }
@@ -39,7 +40,8 @@ function recordAnswer(word, correct) {
 // ===== 出題キュー生成 =====
 function buildQueue(settings) {
   const now = Date.now();
-  const pool = WORDS.filter(w => settings.levels.includes(w.lv) && settings.kinds.includes(w.k));
+  // レベルは「選んだレベル以上」を出題対象にする
+  const pool = WORDS.filter(w => w.lv >= settings.level && settings.kinds.includes(w.k));
   const due = [], fresh = [], future = [];
   for (const w of pool) {
     const p = progress[w.id];
@@ -107,6 +109,41 @@ function isCorrect(word, texts, dir) {
   return false;
 }
 
+// ===== 効果音（Web Audio） =====
+let audioCtx = null;
+function ensureAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  }
+  if (audioCtx && audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+}
+function beep(freq, startOffset, dur, type, vol) {
+  const t = audioCtx.currentTime + startOffset;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type || "sine";
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(vol || 0.25, t + 0.01);
+  gain.gain.setValueAtTime(vol || 0.25, t + dur - 0.05);
+  gain.gain.linearRampToValueAtTime(0, t + dur);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t);
+  osc.stop(t + dur + 0.05);
+}
+function playCorrect() { // ピンポン♪（上昇2音）
+  ensureAudio();
+  if (!audioCtx) return;
+  beep(784, 0, 0.12, "sine", 0.3);
+  beep(1175, 0.13, 0.25, "sine", 0.3);
+}
+function playWrong() { // ブザー（低い2連音）
+  ensureAudio();
+  if (!audioCtx) return;
+  beep(160, 0, 0.2, "square", 0.2);
+  beep(160, 0.26, 0.28, "square", 0.2);
+}
+
 // ===== 音声合成（読み上げ） =====
 function speak(text, lang, rate) {
   return new Promise(resolve => {
@@ -169,25 +206,25 @@ function stopListening() {
 
 // ===== 画面要素 =====
 const $ = id => document.getElementById(id);
-const screens = { setup: $("setup"), session: $("session"), result: $("result") };
+const screens = { setup: $("setup"), session: $("session"), result: $("result"), wrong: $("wrongScreen") };
 function showScreen(name) {
   for (const k in screens) screens[k].classList.toggle("hidden", k !== name);
 }
 
 // ===== 設定の保存・復元 =====
 function readSettings() {
-  const levels = [...document.querySelectorAll("#levelChips input:checked")].map(i => +i.value);
+  const level = +document.querySelector("#levelChips input:checked").value; // このレベル以上を出題
   const kinds = [...document.querySelectorAll("#kindChips input:checked")].map(i => i.value);
   const mode = document.querySelector("#modeChips input:checked").value;
   const count = +document.querySelector("#countChips input:checked").value;
-  return { levels, kinds, mode, count, speakQ: $("optSpeak").checked, auto: $("optAuto").checked };
+  return { level, kinds, mode, count, speakQ: $("optSpeak").checked, auto: $("optAuto").checked };
 }
 function persistSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
 function restoreSettings() {
   let s;
   try { s = JSON.parse(localStorage.getItem(SETTINGS_KEY)); } catch (e) {}
   if (!s) return;
-  document.querySelectorAll("#levelChips input").forEach(i => i.checked = s.levels.includes(+i.value));
+  document.querySelectorAll("#levelChips input").forEach(i => i.checked = +i.value === s.level);
   document.querySelectorAll("#kindChips input").forEach(i => i.checked = s.kinds.includes(i.value));
   document.querySelectorAll("#modeChips input").forEach(i => i.checked = i.value === s.mode);
   document.querySelectorAll("#countChips input").forEach(i => i.checked = +i.value === s.count);
@@ -231,7 +268,8 @@ async function requestWakeLock() {
 
 async function startSession() {
   const settings = readSettings();
-  if (!settings.levels.length || !settings.kinds.length) { alert("レベルと種類を1つ以上選んでください"); return; }
+  if (!settings.kinds.length) { alert("種類を1つ以上選んでください"); return; }
+  ensureAudio(); // ユーザー操作の中でAudioContextを起動しておく
   persistSettings(settings);
   const queue = buildQueue(settings);
   if (!queue.length) { alert("該当する問題がありません"); return; }
@@ -267,6 +305,9 @@ function showQuestion(item) {
   const kindLabel = w.k === "w" ? "単語" : "熟語";
   $("qKind").textContent = `${dirLabel}・Lv${w.lv} ${kindLabel}`;
   $("qText").textContent = item.dir === "e2j" ? w.en : w.ja[0];
+  // 英語が見えている出題では発音記号も表示（和→英では答えがバレるので回答後に表示）
+  $("qIpa").textContent = item.dir === "e2j" && w.ipa ? w.ipa : "";
+  $("qExample").innerHTML = "";
   $("heard").textContent = "";
   $("verdict").textContent = "";
   $("verdict").className = "verdict";
@@ -386,7 +427,7 @@ async function handleManual(action, item) {
   return "repeat";
 }
 
-// 正誤表示・フィードバック読み上げ → "correct"/"wrong" を返す
+// 正誤表示・効果音フィードバック → "correct"/"wrong" を返す
 async function finishAnswer(item, correct, heardText) {
   const w = item.word;
   const s = session.settings;
@@ -394,29 +435,53 @@ async function finishAnswer(item, correct, heardText) {
   if (heardText) $("heard").textContent = "🎤 " + heardText;
 
   const answerText = item.dir === "e2j" ? `${w.en} = ${w.ja[0]}` : `${w.ja[0]} = ${w.en}`;
+  // 回答後は発音記号と例文を表示（和→英でもここで英語が判明するのでOK）
+  if (w.ipa) $("qIpa").textContent = w.ipa;
+  if (w.ex) $("qExample").innerHTML = `${escapeHtml(w.ex)}<span class="ex-ja">${escapeHtml(w.exJa || "")}</span>`;
+
   if (correct) {
     v.textContent = "⭕ 正解！";
     v.className = "verdict ok";
-    if (s.speakQ) await speak("正解", "ja-JP", 1.2);
+    playCorrect();
   } else {
     v.textContent = `❌ 正解: ${answerText}`;
     v.className = "verdict ng";
+    playWrong();
     if (s.speakQ) {
-      await speak("残念。正解は", "ja-JP", 1.2);
+      // ブザーと重ならないよう少し待ってから、正解のみを読み上げ（前置きなし）
+      await new Promise(r => setTimeout(r, 600));
       if (item.dir === "e2j") await speak(w.ja[0], "ja-JP", 1.0);
-      else { await speak(w.en, "en-US", 0.85); await speak(w.en, "en-US", 0.85); }
+      else await speak(w.en, "en-US", 0.85);
     }
   }
   if (!session.active) return "quit";
 
   if (s.auto) {
-    await new Promise(r => setTimeout(r, correct ? 700 : 1200));
+    await new Promise(r => setTimeout(r, correct ? 700 : WRONG_WAIT_MS));
   } else {
     $("nextRow").style.visibility = "visible";
     const res = await waitManual();
     if (res.manual === "quit") { session.index++; return "quit"; }
   }
   return correct ? "correct" : "wrong";
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ===== 間違えた問題リスト =====
+function renderWrongList() {
+  const items = WORDS
+    .map(w => ({ w, p: progress[w.id] }))
+    .filter(x => x.p && x.p.wrong > 0)
+    .sort((a, b) => b.p.wrong - a.p.wrong || a.w.en.localeCompare(b.w.en));
+  $("wrongListBody").innerHTML = items.length
+    ? items.map(({ w, p }) =>
+        `<div><b>${escapeHtml(w.en)}</b> ${w.ipa ? `<span class="wl-ipa">${escapeHtml(w.ipa)}</span>` : ""}` +
+        ` — ${escapeHtml(w.ja[0])}<span class="wl-count">❌${p.wrong} ⭕${p.right}</span></div>`
+      ).join("")
+    : "まだ間違えた問題はありません 🎉";
 }
 
 // ===== 結果画面 =====
@@ -439,6 +504,8 @@ $("okBtn").addEventListener("click", () => manualAction("ok"));
 $("ngBtn").addEventListener("click", () => manualAction("ng"));
 $("nextBtn").addEventListener("click", () => manualAction("next"));
 $("backBtn").addEventListener("click", () => { renderStats(); showScreen("setup"); });
+$("wrongListBtn").addEventListener("click", () => { renderWrongList(); showScreen("wrong"); });
+$("wrongBackBtn").addEventListener("click", () => { renderStats(); showScreen("setup"); });
 
 // 画面復帰時にウェイクロックを取り直す
 document.addEventListener("visibilitychange", () => {
