@@ -142,6 +142,12 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 }
 .ctl-btn:active { opacity: .8; }
 .ctl-btn.next { background: var(--accent); color: #0b1220; font-weight: 700; }
+.ctl-btn.pause {
+  background: transparent; color: var(--accent);
+  border: 2px dashed var(--accent);
+}
+/* 押している間だけ強調表示（実際の一時停止処理はグローバルなpointerdown/upで行う） */
+.ctl-btn.pause:active { background: var(--accent); color: #0b1220; opacity: 1; border-style: solid; }
 
 #resultWrong { font-size: 15px; line-height: 2; }
 #resultSummary { font-size: 17px; line-height: 1.9; }

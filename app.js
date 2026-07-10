@@ -3,7 +3,7 @@
 
 "use strict";
 
-const APP_VERSION = "v8";
+const APP_VERSION = "v9";
 
 // ===== 間隔反復（忘却曲線） =====
 // stage n で正解 → 次回出題は INTERVALS_DAYS[n] 日後。不正解 → stage 0 に戻し10分後に再出題対象。
@@ -79,6 +79,34 @@ function normEn(s) {
   return String(s).toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
 }
 
+// ===== kuromoji（形態素解析）による読み変換 =====
+// 「せいかく」と発音しても音声認識が文脈次第で「性格」「正確」など別の漢字に変換することがあり、
+// 表記だけの比較では発音が合っていても不正解になってしまう（同音異義語問題）。
+// kuromojiで漢字→読み（カタカナ）に変換し、読みが一致すれば正解として扱うことでこれを解消する。
+// 辞書(約6MB)は初回のみダウンロードし、Service Workerがキャッシュするので2回目以降は高速。
+let kuromojiTokenizerPromise = null;
+function getKuromojiTokenizer() {
+  if (!kuromojiTokenizerPromise) {
+    kuromojiTokenizerPromise = new Promise(resolve => {
+      if (typeof kuromoji === "undefined") return resolve(null);
+      kuromoji.builder({ dicPath: "lib/kuromoji/dict/" }).build((err, tokenizer) => {
+        resolve(err ? null : tokenizer);
+      });
+    });
+  }
+  return kuromojiTokenizerPromise;
+}
+// テキストを読み（ひらがな・正規化済み）に変換する。読みが取れない記号等は表層形のまま使う
+function toReading(tokenizer, text) {
+  try {
+    const tokens = tokenizer.tokenize(String(text));
+    const reading = tokens.map(t => t.reading || t.surface_form).join("");
+    return normJa(kataToHira(reading));
+  } catch (e) {
+    return "";
+  }
+}
+
 // 音声コマンド判定（"skip"等は語彙の正解と衝突しないよう語彙側で不使用）
 function detectCommand(texts, dir) {
   const joined = texts.join(" ");
@@ -89,18 +117,40 @@ function detectCommand(texts, dir) {
   return null;
 }
 
+// 漢字の文字列一致だけで判定する（同音異義語には対応しない、高速なフォールバック用）
+function kanjiMatch(word, texts) {
+  for (const t of texts) {
+    const heard = normJa(t);
+    if (!heard) continue;
+    for (const ans of word.ja) {
+      const a = normJa(ans);
+      if (heard.includes(a)) return true;
+      if (a.length >= 3 && a.includes(heard) && heard.length >= 2) return true;
+    }
+  }
+  return false;
+}
+
 // dir: "e2j" は日本語で回答, "j2e" は英語で回答
-function isCorrect(word, texts, dir) {
+// e2j はまず漢字表記で判定し、一致しなければ読み（ひらがな）でも判定する。
+// 音声認識は「げんしょう」と発音しても文脈次第で「現象」のような別の漢字に変換することがあり、
+// 表記だけで比較すると発音は合っているのに不正解になってしまうため（同音異義語対策）。
+async function isCorrect(word, texts, dir) {
   if (dir === "e2j") {
+    if (kanjiMatch(word, texts)) return true;
+    const tokenizer = await getKuromojiTokenizer();
+    if (!tokenizer) return false; // 辞書が未ロードなら漢字判定のみ（劣化しても壊れない）
     for (const t of texts) {
-      const heard = normJa(t);
-      if (!heard) continue;
+      const heardReading = toReading(tokenizer, t);
+      if (!heardReading) continue;
       for (const ans of word.ja) {
-        const a = normJa(ans);
-        if (heard.includes(a)) return true;
-        if (a.length >= 3 && a.includes(heard) && heard.length >= 2) return true;
+        const a = toReading(tokenizer, ans);
+        if (!a) continue;
+        if (heardReading.includes(a)) return true;
+        if (a.length >= 3 && a.includes(heardReading) && heardReading.length >= 2) return true;
       }
     }
+    return false;
   } else {
     // 出題語そのものに加えて、類義語での回答も正解として認める
     const targets = [word.en, ...(word.syn || [])].map(normEn);
@@ -554,7 +604,7 @@ async function askOne(item) {
     if (cmd === "repeat") return "repeat";
     if (cmd === "quit") return "quit";
 
-    return await finishAnswer(item, isCorrect(w, res.texts, item.dir), res.texts[0]);
+    return await finishAnswer(item, await isCorrect(w, res.texts, item.dir), res.texts[0]);
   }
   return "wrong";
 }
@@ -675,3 +725,5 @@ if (!SR) {
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
+// 同音異義語判定用の辞書を早めに読み込み始めておく（初回の回答時に間に合わせるため）
+getKuromojiTokenizer();
