@@ -112,14 +112,21 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 .q-example .ex-hl { color: #fdb022; font-weight: 800; } /* 例文中の出題語 */
 .q-syn { margin-top: 10px; min-height: 24px; font-size: 19px; font-weight: 600; color: var(--accent); }
 
-/* ===== 直近2問の履歴（画面下部に固定表示） ===== */
+/* ===== 語源分解（回答画面で表示） ===== */
+.q-etym { margin-top: 14px; min-height: 20px; }
+.etym-parts { font-size: 17px; font-weight: 700; color: #fdb022; letter-spacing: .02em; }
+.etym-gloss { margin-top: 6px; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; }
+.etym-part { font-size: 13px; color: var(--sub); }
+.etym-part b { color: var(--text); font-weight: 700; }
+
+/* ===== 直近3問の履歴（画面下部に固定表示） ===== */
 .history-bar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
-  display: flex; flex-direction: column; gap: 3px;
-  padding: 7px 16px calc(7px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
   background: rgba(16, 24, 40, 0.94);
   border-top: 1px solid #344054;
-  font-size: 12px;
+  font-size: 15px;
 }
 .history-bar:empty { display: none; }
 .hist-item { color: var(--sub); }
@@ -141,8 +148,8 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 .wl-ipa { color: var(--accent); font-size: 13px; }
 .wl-count { color: var(--ng); font-size: 13px; margin-left: 6px; }
 
-/* 下部固定の履歴バーに隠れないよう余白を確保 */
-#session { padding-bottom: 60px; }
+/* 下部固定の履歴バー(3行)に隠れないよう余白を確保 */
+#session { padding-bottom: 90px; }
 
 /* ===== 縦長画面（折りたたみ時のカバーディスプレイ等） =====
    折りたたみ/展開でビューポートが変わると、メディアクエリにより自動で切り替わる */
@@ -151,7 +158,7 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
   #session {
     display: flex; flex-direction: column;
     min-height: 100vh; min-height: 100dvh;
-    padding-bottom: 70px;
+    padding-bottom: 100px;
   }
   #session .q-area {
     flex: 1; display: flex; flex-direction: column; justify-content: center;
@@ -187,10 +194,13 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
   .verdict { font-size: 38px; }
   .q-example { font-size: 28px; }
   .q-example .ex-ja { font-size: 18px; }
-  .q-syn { font-size: 17px; }
+  .q-syn { font-size: 22px; }
+  .etym-parts { font-size: 21px; }
+  .etym-part { font-size: 15px; }
   .heard { font-size: 19px; }
   .controls { max-width: 640px; margin: 0 auto; }
   .ctl-btn { padding: 18px 8px; font-size: 18px; }
+  .history-bar { font-size: 17px; }
 
   #wrongListBody { column-count: 2; column-gap: 28px; }
 }

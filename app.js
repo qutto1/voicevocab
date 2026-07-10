@@ -280,13 +280,14 @@ function waitAutoAdvance(ms) {
   });
 }
 
-// ===== 直近2問の履歴表示 =====
+// ===== 直近3問の履歴表示 =====
+const HISTORY_SIZE = 3;
 function pushHistory(item, correct) {
   const w = item.word;
   const q = item.dir === "e2j" ? w.en : w.ja[0];
   const a = item.dir === "e2j" ? w.ja[0] : w.en;
   session.history.unshift({ q, a, correct });
-  session.history.length = Math.min(session.history.length, 2);
+  session.history.length = Math.min(session.history.length, HISTORY_SIZE);
   renderHistory();
 }
 function renderHistory() {
@@ -400,6 +401,14 @@ function exampleHtml(w) {
   return `${html}<span class="ex-ja">${escapeHtml(w.exJa || "")}</span>`;
 }
 
+// 語源分解（部分 + 意味）を回答画面用のHTMLにする
+function etymHtml(w) {
+  if (!w.etym || !w.etym.length) return "";
+  const parts = w.etym.map(([p]) => escapeHtml(p)).join(" + ");
+  const glosses = w.etym.map(([p, m]) => `<span class="etym-part"><b>${escapeHtml(p)}</b> ${escapeHtml(m)}</span>`).join("");
+  return `<div class="etym-parts">${parts}</div><div class="etym-gloss">${glosses}</div>`;
+}
+
 function showQuestion(item) {
   const w = item.word;
   const dirLabel = item.dir === "e2j" ? "英→和" : "和→英";
@@ -417,6 +426,8 @@ function showQuestion(item) {
     $("qIpa").textContent = "";
     $("qSynonyms").textContent = "";
   }
+  // 語源は「回答画面」専用の情報なので、出題時は常に隠す
+  $("qEtym").innerHTML = "";
   $("heard").textContent = "";
   $("verdict").textContent = "";
   $("verdict").className = "verdict";
@@ -559,6 +570,8 @@ async function finishAnswer(item, correct, heardText) {
     if (w.ipa) $("qIpa").textContent = w.ipa;
     if (s.showSyn && w.syn && w.syn.length) $("qSynonyms").textContent = "類義語: " + w.syn.join(", ");
   }
+  // 語源分解は回答画面（両方向とも）で表示
+  $("qEtym").innerHTML = etymHtml(w);
 
   if (correct) {
     v.textContent = "⭕ 正解！";
