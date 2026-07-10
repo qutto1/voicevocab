@@ -89,7 +89,6 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 }
 
 .q-area { text-align: center; padding: 10px 0 20px; min-height: 300px; }
-.q-kind { color: var(--sub); font-size: 13px; margin-bottom: 12px; }
 .q-text {
   font-size: 44px; font-weight: 800; line-height: 1.25;
   word-break: break-word; margin-bottom: 6px; min-height: 60px;
@@ -98,15 +97,13 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
   color: var(--accent); font-size: 20px; margin-bottom: 12px; min-height: 26px;
   font-family: "Segoe UI", "Noto Sans", sans-serif;
 }
-.phase { color: var(--sub); font-size: 15px; min-height: 22px; line-height: 22px; }
-.mic {
-  font-size: 40px; margin-top: 10px;
-  animation: pulse 1s infinite;
+.q-pos {
+  font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
+  font-size: 14px; font-weight: 700; color: var(--sub);
+  border: 1px solid var(--sub); border-radius: 6px; padding: 1px 6px;
+  margin-right: 8px; vertical-align: middle;
 }
-/* display:noneではなくopacityで隠す。マイク分のスペースを常に確保し、
-   認識の開始/終了でレイアウトが動かないようにする */
-.mic.idle { opacity: 0; animation: none; }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+.phase { color: var(--sub); font-size: 15px; min-height: 22px; line-height: 22px; }
 .heard { color: var(--sub); font-size: 16px; margin-top: 12px; min-height: 24px; line-height: 24px; }
 /* line-heightを明示指定して固定（絵文字は行の高さがフォントごとに微妙に違うため、
    min-heightだけだと正誤判定の前後で1〜3px程度レイアウトがずれることがあった） */
@@ -186,6 +183,19 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 
 /* 下部固定の履歴バー(3行)に隠れないよう余白を確保 */
 #session { padding-bottom: 90px; }
+
+/* ===== 音声認識が3回連続で失敗したときの一時中断オーバーレイ ===== */
+.pause-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px;
+  background: rgba(16, 24, 40, 0.96);
+  text-align: center; padding: 24px;
+}
+.pause-msg { font-size: 20px; line-height: 1.7; color: var(--text); }
+.pause-quit {
+  background: none; border: 1px solid var(--sub); color: var(--sub);
+  border-radius: 999px; padding: 8px 20px; font-size: 14px;
+}
 
 /* ===== 縦長画面（折りたたみ時のカバーディスプレイ等） =====
    折りたたみ/展開でビューポートが変わると、メディアクエリにより自動で切り替わる */

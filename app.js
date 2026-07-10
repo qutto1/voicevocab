@@ -3,7 +3,7 @@
 
 "use strict";
 
-const APP_VERSION = "v11";
+const APP_VERSION = "v12";
 
 // ===== 間隔反復（忘却曲線） =====
 // stage n で正解 → 次回出題は INTERVALS_DAYS[n] 日後。不正解 → stage 0 に戻し10分後に再出題対象。
@@ -11,6 +11,7 @@ const INTERVALS_DAYS = [0, 1, 3, 7, 14, 30, 60, 120];
 const RELEARN_MS = 10 * 60 * 1000;      // 不正解後の再出題間隔
 const REQUEUE_GAP = 4;                   // セッション内で間違えた問題を何問後に再出題するか
 const LISTEN_TIMEOUT_MS = 11000;         // 音声認識の待機時間（再試行を廃止した分、長めに確保）
+const NO_SPEECH_STREAK_LIMIT = 3;        // 何回連続で無音だったら一時中断するか
 const WRONG_WAIT_MS = 5000;              // 不正解後、次の問題までの待機時間
 const CORRECT_WAIT_MS = 700;             // 正解後、次の問題までの待機時間（通常）
 const CORRECT_WAIT_SYN_MS = 2000;        // 正解後の待機時間（類義語表示オプションON時）
@@ -344,6 +345,24 @@ function waitAutoAdvance(ms) {
   });
 }
 
+// 音声が連続で認識できなかったときに全画面表示する一時中断オーバーレイ。
+// タッチで再開、「終了する」でセッションを終える（{quit:true}を返す）
+function waitForTapToResume() {
+  return new Promise(resolve => {
+    const overlay = $("pauseOverlay");
+    overlay.classList.remove("hidden");
+    const cleanup = () => {
+      overlay.classList.add("hidden");
+      overlay.removeEventListener("pointerdown", onTap);
+      $("pauseQuitBtn").removeEventListener("click", onQuit);
+    };
+    const onTap = () => { cleanup(); resolve({ quit: false }); };
+    const onQuit = e => { e.stopPropagation(); cleanup(); resolve({ quit: true }); };
+    overlay.addEventListener("pointerdown", onTap);
+    $("pauseQuitBtn").addEventListener("click", onQuit);
+  });
+}
+
 // ===== 直近3問の履歴表示（間違えた問題のみ） =====
 const HISTORY_SIZE = 3;
 function pushHistory(item, correct) {
@@ -383,7 +402,7 @@ async function startSession() {
   session.queue = queue.map(w => ({ word: w, dir: questionDir(settings) }));
   session.total = session.queue.length;
   session.index = 0;
-  session.right = 0; session.wrong = 0; session.wrongList = []; session.history = [];
+  session.right = 0; session.wrong = 0; session.wrongList = []; session.history = []; session.noSpeechStreak = 0;
   renderHistory();
   showScreen("session");
   requestWakeLock();
@@ -399,11 +418,8 @@ function endSession() {
   showScreen("result");
 }
 
-function setPhase(text, mic) {
+function setPhase(text) {
   $("phase").textContent = text;
-  // display:none だとマイクの分のスペースが消えてレイアウトがずれるため、
-  // 透明化(opacity)だけで表示/非表示を切り替えてスペースは常に確保しておく
-  $("micIcon").classList.toggle("idle", !mic);
 }
 
 // ===== 例文中の出題語ハイライト =====
@@ -485,20 +501,18 @@ function etymHtml(w) {
 
 function showQuestion(item) {
   const w = item.word;
-  const dirLabel = item.dir === "e2j" ? "英→和" : "和→英";
-  const kindLabel = w.k === "w" ? "単語" : "熟語";
-  $("qKind").textContent = `${dirLabel}・Lv${w.lv} ${kindLabel}`;
   $("qText").textContent = item.dir === "e2j" ? w.en : w.ja[0];
 
-  // 回答画面でしか見せない情報（和訳・類義語・語源、和→英の場合は例文と発音記号も）は
+  // 回答画面でしか見せない情報（和訳・類義語・語源、和→英の場合は品詞・発音記号・例文も）は
   // 最初から最終的な内容までレンダリングしておき、spoilerクラス(visibility:hidden)で隠す。
   // 正誤判定のタイミングでDOMに要素を足し引きするとレイアウトが動いてしまうため、
   // 「表示するかどうか」だけを切り替えて位置がずれないようにしている。
   $("qExample").innerHTML = exampleHtml(w, item.dir);
 
   const ipa = w.ipa || "";
-  $("qIpa").textContent = ipa;
-  $("qIpa").classList.toggle("spoiler", item.dir === "j2e" && !!ipa);
+  $("qPos").textContent = w.pos || "";
+  $("qIpaText").textContent = ipa;
+  $("qIpa").classList.toggle("spoiler", item.dir === "j2e" && !!(w.pos || ipa));
 
   const synText = session.settings.showSyn && w.syn && w.syn.length ? "類義語: " + w.syn.join(", ") : "";
   $("qSynonyms").textContent = synText;
@@ -514,10 +528,9 @@ function showQuestion(item) {
   $("progressLabel").textContent = `${Math.min(session.index + 1, session.total)} / ${session.total}`;
   $("scoreLabel").textContent = `⭕${session.right} ❌${session.wrong}`;
   $("nextRow").style.visibility = "hidden";
-  // 「回答してください」の案内文とマイクアイコンは、音声認識を開始する前から
-  // 表示しておく（認識開始の瞬間に出すとレイアウトがずれてしまうため）
+  // 「回答してください」の案内文は、音声認識を開始する前から表示しておく
+  // （認識開始の瞬間に出すとレイアウトがずれてしまうため）
   $("phase").textContent = item.dir === "e2j" ? "日本語で答えてください" : "英語で答えてください";
-  $("micIcon").classList.remove("idle");
 }
 
 // 手動ボタン割り込み。runLoop 内の待機を解決する
@@ -591,7 +604,7 @@ async function askOne(item) {
   const answerLang = item.dir === "e2j" ? "ja-JP" : "en-US";
   showQuestion(item);
 
-  // 出題読み上げ（案内文とマイクアイコンは showQuestion で既に表示済み）
+  // 出題読み上げ（案内文は showQuestion で既に表示済み）
   if (s.speakQ) {
     if (item.dir === "e2j") await speak(w.en, "en-US", 0.9);
     else await speak(w.ja[0], "ja-JP", 1.0);
@@ -599,9 +612,9 @@ async function askOne(item) {
   }
 
   // 回答の聞き取り。「もう一度どうぞ」の再試行は行わず、その分認識時間を長めに取る
-  setPhase(item.dir === "e2j" ? "日本語で答えてください" : "英語で答えてください", true);
+  setPhase(item.dir === "e2j" ? "日本語で答えてください" : "英語で答えてください");
   const res = await listenInterruptible(answerLang, LISTEN_TIMEOUT_MS);
-  setPhase("", false);
+  setPhase("");
   if (!session.active) return "quit";
 
   if (res.manual) return await handleManual(res.manual, item);
@@ -612,9 +625,17 @@ async function askOne(item) {
   }
 
   if (res.noSpeech || res.error) {
-    return await finishAnswer(item, false, "（聞き取れませんでした）");
+    const outcome = await finishAnswer(item, false, "（聞き取れませんでした）");
+    session.noSpeechStreak = (session.noSpeechStreak || 0) + 1;
+    if (session.noSpeechStreak >= NO_SPEECH_STREAK_LIMIT) {
+      session.noSpeechStreak = 0;
+      const r = await waitForTapToResume();
+      if (r.quit) return "quit";
+    }
+    return outcome;
   }
 
+  session.noSpeechStreak = 0;
   $("heard").textContent = "🎤 " + res.texts[0];
   const cmd = detectCommand(res.texts, item.dir);
   if (cmd === "skip") return "skip";

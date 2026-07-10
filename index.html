@@ -82,11 +82,9 @@
   </div>
 
   <div class="q-area">
-    <div id="qKind" class="q-kind">英→和・Lv1</div>
     <div id="qText" class="q-text">apple</div>
-    <div id="qIpa" class="q-ipa"></div>
+    <div id="qIpa" class="q-ipa"><span id="qPos" class="q-pos"></span><span id="qIpaText"></span></div>
     <div id="phase" class="phase">…</div>
-    <div id="micIcon" class="mic idle">🎤</div>
     <div id="heard" class="heard"></div>
     <div id="verdict" class="verdict"></div>
     <div id="qEtym" class="q-etym"></div>
@@ -108,6 +106,10 @@
     <p class="note">音声コマンド: 「スキップ」「もう一度」「終了」／指を離すと次の問題へ進みます</p>
   </div>
   <div id="historyBar" class="history-bar"></div>
+  <div id="pauseOverlay" class="pause-overlay hidden">
+    <p class="pause-msg">🔇 音声が認識できないので<br>一時中断しました。<br>タッチすると続けます。</p>
+    <button id="pauseQuitBtn" type="button" class="pause-quit">終了する</button>
+  </div>
 </div>
 
 <!-- ===== 間違えた問題リスト画面 ===== -->
