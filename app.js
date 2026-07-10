@@ -12,7 +12,7 @@ const WRONG_WAIT_MS = 5000;              // 不正解後、次の問題までの
 const CORRECT_WAIT_MS = 700;             // 正解後、次の問題までの待機時間（通常）
 const CORRECT_WAIT_SYN_MS = 2000;        // 正解後の待機時間（類義語表示オプションON時）
 const PROG_KEY = "vv_progress_v1";
-const SETTINGS_KEY = "vv_settings_v2";   // レベルが5段階(以上指定)になったためv2
+const SETTINGS_KEY = "vv_settings_v3";   // レベルが複数選択トグルに戻ったためv3
 
 let progress = {};   // { id: {stage, due, right, wrong} }
 try { progress = JSON.parse(localStorage.getItem(PROG_KEY)) || {}; } catch (e) { progress = {}; }
@@ -42,8 +42,7 @@ function recordAnswer(word, correct) {
 // ===== 出題キュー生成 =====
 function buildQueue(settings) {
   const now = Date.now();
-  // レベルは「選んだレベル以上」を出題対象にする
-  const pool = WORDS.filter(w => w.lv >= settings.level && settings.kinds.includes(w.k));
+  const pool = WORDS.filter(w => settings.levels.includes(w.lv) && settings.kinds.includes(w.k));
   const due = [], fresh = [], future = [];
   for (const w of pool) {
     const p = progress[w.id];
@@ -215,18 +214,18 @@ function showScreen(name) {
 
 // ===== 設定の保存・復元 =====
 function readSettings() {
-  const level = +document.querySelector("#levelChips input:checked").value; // このレベル以上を出題
+  const levels = [...document.querySelectorAll("#levelChips input:checked")].map(i => +i.value);
   const kinds = [...document.querySelectorAll("#kindChips input:checked")].map(i => i.value);
   const mode = document.querySelector("#modeChips input:checked").value;
   const count = +document.querySelector("#countChips input:checked").value;
-  return { level, kinds, mode, count, speakQ: $("optSpeak").checked, auto: $("optAuto").checked, showSyn: $("optSyn").checked };
+  return { levels, kinds, mode, count, speakQ: $("optSpeak").checked, auto: $("optAuto").checked, showSyn: $("optSyn").checked };
 }
 function persistSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
 function restoreSettings() {
   let s;
   try { s = JSON.parse(localStorage.getItem(SETTINGS_KEY)); } catch (e) {}
   if (!s) return;
-  document.querySelectorAll("#levelChips input").forEach(i => i.checked = +i.value === s.level);
+  document.querySelectorAll("#levelChips input").forEach(i => i.checked = (s.levels || []).includes(+i.value));
   document.querySelectorAll("#kindChips input").forEach(i => i.checked = s.kinds.includes(i.value));
   document.querySelectorAll("#modeChips input").forEach(i => i.checked = i.value === s.mode);
   document.querySelectorAll("#countChips input").forEach(i => i.checked = +i.value === s.count);
@@ -271,7 +270,7 @@ async function requestWakeLock() {
 
 async function startSession() {
   const settings = readSettings();
-  if (!settings.kinds.length) { alert("種類を1つ以上選んでください"); return; }
+  if (!settings.levels.length || !settings.kinds.length) { alert("レベルと種類を1つ以上選んでください"); return; }
   ensureAudio(); // ユーザー操作の中でAudioContextを起動しておく
   persistSettings(settings);
   const queue = buildQueue(settings);
@@ -302,21 +301,82 @@ function setPhase(text, mic) {
   $("micIcon").classList.toggle("hidden", !mic);
 }
 
+// ===== 例文中の出題語ハイライト =====
+// 例文では出題語が活用形（caught, went, I'm 等）で現れるため、不規則変化表 + 語幹一致で探す
+const IRREGULAR_FORMS = {
+  be: ["am", "is", "are", "was", "were", "been", "being", "i'm", "he's", "she's", "it's"],
+  go: ["went", "gone", "goes", "going"],
+  come: ["came", "comes", "coming"],
+  catch: ["caught", "catches", "catching"],
+  find: ["found", "finds", "finding"],
+  run: ["ran", "runs", "running"],
+  take: ["took", "taken", "takes", "taking"],
+  fall: ["fell", "fallen", "falls", "falling"],
+  hold: ["held", "holds", "holding"],
+  bring: ["brought", "brings", "bringing"],
+  get: ["got", "gotten", "gets", "getting"],
+  give: ["gave", "given", "gives", "giving"],
+  make: ["made", "makes", "making"],
+  do: ["did", "done", "does", "doing"],
+  stand: ["stood", "stands", "standing"],
+  put: ["puts", "putting"],
+  set: ["sets", "setting"],
+  eat: ["ate", "eaten", "eats", "eating"],
+};
+function tokenMatches(exTok, tgtTok) {
+  const e = exTok.toLowerCase().replace(/'/g, "");
+  const t = tgtTok.toLowerCase();
+  if (e === t.replace(/'/g, "")) return true;
+  if (IRREGULAR_FORMS[t] && IRREGULAR_FORMS[t].some(f => f.replace(/'/g, "") === e)) return true;
+  if (t.length >= 4 && e.startsWith(t.slice(0, 4))) return true; // 規則変化 (abandoned, carried...)
+  return false;
+}
+// 例文HTMLを生成し、出題語に当たる部分を <b class="ex-hl"> で強調する
+function exampleHtml(w) {
+  if (!w.ex) return "";
+  const ex = w.ex;
+  const tgt = w.en.split(/\s+/);
+  const re = /[A-Za-z']+/g;
+  const toks = [];
+  let m;
+  while ((m = re.exec(ex))) toks.push({ text: m[0], start: m.index, end: m.index + m[0].length });
+  // 各位置を起点に、間に2語まで挟みつつ（"pick you up" 等）出題語の並びを探す
+  let matched = null;
+  for (let i = 0; i < toks.length && !matched; i++) {
+    let ti = 0, gaps = 0;
+    const picks = [];
+    for (let j = i; j < toks.length && ti < tgt.length; j++) {
+      if (tokenMatches(toks[j].text, tgt[ti])) { picks.push(j); ti++; gaps = 0; }
+      else if (picks.length) { if (++gaps > 2) break; }
+      else break;
+    }
+    if (ti === tgt.length) matched = picks;
+  }
+  const hl = new Set(matched || []);
+  let html = "", pos = 0;
+  toks.forEach((tk, idx) => {
+    html += escapeHtml(ex.slice(pos, tk.start));
+    html += hl.has(idx) ? `<b class="ex-hl">${escapeHtml(tk.text)}</b>` : escapeHtml(tk.text);
+    pos = tk.end;
+  });
+  html += escapeHtml(ex.slice(pos));
+  return `${html}<span class="ex-ja">${escapeHtml(w.exJa || "")}</span>`;
+}
+
 function showQuestion(item) {
   const w = item.word;
   const dirLabel = item.dir === "e2j" ? "英→和" : "和→英";
   const kindLabel = w.k === "w" ? "単語" : "熟語";
   $("qKind").textContent = `${dirLabel}・Lv${w.lv} ${kindLabel}`;
   $("qText").textContent = item.dir === "e2j" ? w.en : w.ja[0];
-  // 英語(答え)が見えている英→和のみ、出題時点で発音記号・例文・類義語を表示。
-  // 和→英は英語が答えになるため、これらは回答後まで隠す（先に見せると答えが分かってしまう）
+  // 例文は両方向とも出題時点から表示し、出題語の部分を強調表示する
+  $("qExample").innerHTML = exampleHtml(w);
+  // 発音記号・類義語は英語が問題文の英→和のみ出題時に表示（和→英は回答後）
   if (item.dir === "e2j") {
     $("qIpa").textContent = w.ipa || "";
-    $("qExample").innerHTML = w.ex ? `${escapeHtml(w.ex)}<span class="ex-ja">${escapeHtml(w.exJa || "")}</span>` : "";
     $("qSynonyms").textContent = session.settings.showSyn && w.syn && w.syn.length ? "類義語: " + w.syn.join(", ") : "";
   } else {
     $("qIpa").textContent = "";
-    $("qExample").innerHTML = "";
     $("qSynonyms").textContent = "";
   }
   $("heard").textContent = "";
@@ -360,6 +420,17 @@ async function runLoop() {
 
     if (outcome === "quit") { endSession(); return; }
     if (outcome === "repeat") continue;
+
+    if (outcome === "skip") {
+      // スキップは正誤判定なし。少し後にもう一度出題する
+      if (!item.requeued) {
+        const pos = Math.min(session.index + 1 + REQUEUE_GAP, session.queue.length);
+        session.queue.splice(pos, 0, { word: item.word, dir: item.dir, requeued: true });
+        session.total = session.queue.length;
+      }
+      session.index++;
+      continue;
+    }
 
     if (outcome === "correct") {
       session.right++;
@@ -420,7 +491,7 @@ async function askOne(item) {
 
     $("heard").textContent = "🎤 " + res.texts[0];
     const cmd = detectCommand(res.texts, item.dir);
-    if (cmd === "skip") return await finishAnswer(item, false, "（スキップ）");
+    if (cmd === "skip") return "skip";
     if (cmd === "repeat") return "repeat";
     if (cmd === "quit") return "quit";
 
@@ -432,8 +503,7 @@ async function askOne(item) {
 async function handleManual(action, item) {
   if (action === "quit") return "quit";
   if (action === "repeat") return "repeat";
-  if (action === "skip") return await finishAnswer(item, false, "（スキップ）");
-  if (action === "ng") return await finishAnswer(item, false, "（手動判定）");
+  if (action === "skip") return "skip";
   return "repeat";
 }
 
@@ -445,10 +515,9 @@ async function finishAnswer(item, correct, heardText) {
   if (heardText) $("heard").textContent = "🎤 " + heardText;
 
   const answerText = item.dir === "e2j" ? `${w.en} = ${w.ja[0]}` : `${w.ja[0]} = ${w.en}`;
-  // 和→英はここで初めて英語が判明するので、回答後に発音記号・例文・類義語を表示する
+  // 和→英では出題時に隠していた発音記号・類義語を回答後に表示する（例文は出題時から表示済み）
   if (item.dir === "j2e") {
     if (w.ipa) $("qIpa").textContent = w.ipa;
-    if (w.ex) $("qExample").innerHTML = `${escapeHtml(w.ex)}<span class="ex-ja">${escapeHtml(w.exJa || "")}</span>`;
     if (s.showSyn && w.syn && w.syn.length) $("qSynonyms").textContent = "類義語: " + w.syn.join(", ");
   }
 
@@ -514,7 +583,6 @@ $("startBtn").addEventListener("click", startSession);
 $("quitBtn").addEventListener("click", () => manualAction("quit") || (session.active && endSession()));
 $("repeatBtn").addEventListener("click", () => manualAction("repeat"));
 $("skipBtn").addEventListener("click", () => manualAction("skip"));
-$("ngBtn").addEventListener("click", () => manualAction("ng"));
 $("nextBtn").addEventListener("click", () => manualAction("next"));
 $("backBtn").addEventListener("click", () => { renderStats(); showScreen("setup"); });
 $("wrongListBtn").addEventListener("click", () => { renderWrongList(); showScreen("wrong"); });

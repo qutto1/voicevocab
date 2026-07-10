@@ -109,6 +109,7 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
   font-size: 22px; font-weight: 600; line-height: 1.6; color: var(--text);
 }
 .q-example .ex-ja { color: var(--sub); font-size: 15px; font-weight: 400; display: block; }
+.q-example .ex-hl { color: #fdb022; font-weight: 800; } /* 例文中の出題語 */
 .q-syn { margin-top: 10px; min-height: 20px; font-size: 14px; color: var(--accent); }
 
 .btn-row { display: flex; gap: 10px; margin-bottom: 10px; }
@@ -119,13 +120,34 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
   border: none; border-radius: 12px;
 }
 .ctl-btn:active { opacity: .8; }
-.ctl-btn.ng { background: #7a271a; }
 .ctl-btn.next { background: var(--accent); color: #0b1220; font-weight: 700; }
 
 #resultWrong, #wrongListBody { font-size: 15px; line-height: 2; }
 #resultSummary { font-size: 17px; line-height: 1.9; }
 .wl-ipa { color: var(--accent); font-size: 13px; }
 .wl-count { color: var(--ng); font-size: 13px; margin-left: 6px; }
+
+/* ===== 縦長画面（折りたたみ時のカバーディスプレイ等） =====
+   折りたたみ/展開でビューポートが変わると、メディアクエリにより自動で切り替わる */
+@media (max-width: 599px) {
+  /* 学習画面: 縦方向いっぱいに使い、ボタンを画面下部（親指の届く位置）に固定 */
+  #session {
+    display: flex; flex-direction: column;
+    min-height: 100vh; min-height: 100dvh;
+    padding-bottom: 24px;
+  }
+  #session .q-area {
+    flex: 1; display: flex; flex-direction: column; justify-content: center;
+  }
+  #session .controls { margin-top: auto; }
+}
+/* 特に縦に長い画面では文字とボタンをさらに大きく */
+@media (max-width: 599px) and (min-height: 760px) {
+  .q-text { font-size: 52px; }
+  .q-example { font-size: 24px; }
+  .q-example .ex-ja { font-size: 16px; }
+  .ctl-btn { padding: 18px 8px; font-size: 17px; }
+}
 
 /* ===== Galaxy Fold 7 展開時などの広い画面 ===== */
 @media (min-width: 600px) {
