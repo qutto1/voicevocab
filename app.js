@@ -3,6 +3,8 @@
 
 "use strict";
 
+const APP_VERSION = "v8";
+
 // ===== 間隔反復（忘却曲線） =====
 // stage n で正解 → 次回出題は INTERVALS_DAYS[n] 日後。不正解 → stage 0 に戻し10分後に再出題対象。
 const INTERVALS_DAYS = [0, 1, 3, 7, 14, 30, 60, 120];
@@ -410,9 +412,8 @@ function exampleHtml(w, includeJa) {
 // 語源分解（部分 + 意味）を回答画面用のHTMLにする
 function etymHtml(w) {
   if (!w.etym || !w.etym.length) return "";
-  const parts = w.etym.map(([p]) => escapeHtml(p)).join(" + ");
   const glosses = w.etym.map(([p, m]) => `<span class="etym-part"><b>${escapeHtml(p)}</b> ${escapeHtml(m)}</span>`).join("");
-  return `<div class="etym-parts">${parts}</div><div class="etym-gloss">${glosses}</div>`;
+  return `<div class="etym-gloss">${glosses}</div>`;
 }
 
 function showQuestion(item) {
@@ -440,6 +441,10 @@ function showQuestion(item) {
   $("progressLabel").textContent = `${Math.min(session.index + 1, session.total)} / ${session.total}`;
   $("scoreLabel").textContent = `⭕${session.right} ❌${session.wrong}`;
   $("nextRow").style.visibility = "hidden";
+  // 「回答してください」の案内文とマイクアイコンは、音声認識を開始する前から
+  // 表示しておく（認識開始の瞬間に出すとレイアウトがずれてしまうため）
+  $("phase").textContent = item.dir === "e2j" ? "日本語で答えてください" : "英語で答えてください";
+  $("micIcon").classList.remove("hidden");
 }
 
 // 手動ボタン割り込み。runLoop 内の待機を解決する
@@ -513,9 +518,8 @@ async function askOne(item) {
   const answerLang = item.dir === "e2j" ? "ja-JP" : "en-US";
   showQuestion(item);
 
-  // 出題読み上げ
+  // 出題読み上げ（案内文とマイクアイコンは showQuestion で既に表示済み）
   if (s.speakQ) {
-    setPhase("出題中…", false);
     if (item.dir === "e2j") await speak(w.en, "en-US", 0.9);
     else await speak(w.ja[0], "ja-JP", 1.0);
     if (!session.active) return "quit";
@@ -662,6 +666,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // ===== 初期化 =====
+$("appVersion").textContent = APP_VERSION;
 restoreSettings();
 renderStats();
 if (!SR) {
