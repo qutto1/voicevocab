@@ -97,14 +97,17 @@ function isCorrect(word, texts, dir) {
       }
     }
   } else {
-    const target = normEn(word.en);
+    // 出題語そのものに加えて、類義語での回答も正解として認める
+    const targets = [word.en, ...(word.syn || [])].map(normEn);
     for (const t of texts) {
       let heard = normEn(t);
       if (!heard) continue;
       // "to give up" のような to 付き回答も許容
       if (heard.startsWith("to ")) heard = heard.slice(3);
-      if (heard === target || heard.includes(target)) return true;
-      if (target.includes(heard) && heard.length >= Math.max(3, target.length - 2)) return true;
+      for (const target of targets) {
+        if (heard === target || heard.includes(target)) return true;
+        if (target.includes(heard) && heard.length >= Math.max(3, target.length - 2)) return true;
+      }
     }
   }
   return false;
@@ -255,9 +258,42 @@ function renderStats() {
 // ===== セッション制御 =====
 const session = {
   active: false, queue: [], index: 0, total: 0,
-  right: 0, wrong: 0, wrongList: [],
+  right: 0, wrong: 0, wrongList: [], history: [],
   settings: null, currentResolve: null, wakeLock: null,
 };
+
+// ===== 画面を指で押し続けている間は自動で次の問題に進めない =====
+let isTouching = false;
+document.addEventListener("pointerdown", () => { isTouching = true; });
+document.addEventListener("pointerup", () => { isTouching = false; });
+document.addEventListener("pointercancel", () => { isTouching = false; });
+
+// 最低 ms 待機し、その時点でまだ画面を押しっぱなしなら指を離すまで待つ
+function waitAutoAdvance(ms) {
+  return new Promise(resolve => {
+    const start = Date.now();
+    const tick = () => {
+      if (Date.now() - start >= ms && !isTouching) return resolve();
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+}
+
+// ===== 直近2問の履歴表示 =====
+function pushHistory(item, correct) {
+  const w = item.word;
+  const q = item.dir === "e2j" ? w.en : w.ja[0];
+  const a = item.dir === "e2j" ? w.ja[0] : w.en;
+  session.history.unshift({ q, a, correct });
+  session.history.length = Math.min(session.history.length, 2);
+  renderHistory();
+}
+function renderHistory() {
+  $("historyBar").innerHTML = session.history.map(h =>
+    `<span class="hist-item ${h.correct ? "ok" : "ng"}">${h.correct ? "⭕" : "❌"} ${escapeHtml(h.q)} → ${escapeHtml(h.a)}</span>`
+  ).join("");
+}
 
 function questionDir(settings) {
   if (settings.mode === "mix") return Math.random() < 0.5 ? "e2j" : "j2e";
@@ -281,7 +317,8 @@ async function startSession() {
   session.queue = queue.map(w => ({ word: w, dir: questionDir(settings) }));
   session.total = session.queue.length;
   session.index = 0;
-  session.right = 0; session.wrong = 0; session.wrongList = [];
+  session.right = 0; session.wrong = 0; session.wrongList = []; session.history = [];
+  renderHistory();
   showScreen("session");
   requestWakeLock();
   runLoop();
@@ -369,13 +406,14 @@ function showQuestion(item) {
   const kindLabel = w.k === "w" ? "単語" : "熟語";
   $("qKind").textContent = `${dirLabel}・Lv${w.lv} ${kindLabel}`;
   $("qText").textContent = item.dir === "e2j" ? w.en : w.ja[0];
-  // 例文は両方向とも出題時点から表示し、出題語の部分を強調表示する
-  $("qExample").innerHTML = exampleHtml(w);
-  // 発音記号・類義語は英語が問題文の英→和のみ出題時に表示（和→英は回答後）
+  // 例文・発音記号・類義語は英語が答えになる和→英では出題時に隠し、回答後に表示する
+  // （英語が問題文の英→和は答えが日本語なので、出題時点から見せてよい）
   if (item.dir === "e2j") {
+    $("qExample").innerHTML = exampleHtml(w);
     $("qIpa").textContent = w.ipa || "";
     $("qSynonyms").textContent = session.settings.showSyn && w.syn && w.syn.length ? "類義語: " + w.syn.join(", ") : "";
   } else {
+    $("qExample").innerHTML = "";
     $("qIpa").textContent = "";
     $("qSynonyms").textContent = "";
   }
@@ -515,8 +553,9 @@ async function finishAnswer(item, correct, heardText) {
   if (heardText) $("heard").textContent = "🎤 " + heardText;
 
   const answerText = item.dir === "e2j" ? `${w.en} = ${w.ja[0]}` : `${w.ja[0]} = ${w.en}`;
-  // 和→英では出題時に隠していた発音記号・類義語を回答後に表示する（例文は出題時から表示済み）
+  // 和→英では出題時に隠していた例文・発音記号・類義語を回答後に表示する
   if (item.dir === "j2e") {
+    $("qExample").innerHTML = exampleHtml(w);
     if (w.ipa) $("qIpa").textContent = w.ipa;
     if (s.showSyn && w.syn && w.syn.length) $("qSynonyms").textContent = "類義語: " + w.syn.join(", ");
   }
@@ -536,11 +575,12 @@ async function finishAnswer(item, correct, heardText) {
       else await speak(w.en, "en-US", 0.85);
     }
   }
+  pushHistory(item, correct);
   if (!session.active) return "quit";
 
   if (s.auto) {
     const wait = correct ? (s.showSyn ? CORRECT_WAIT_SYN_MS : CORRECT_WAIT_MS) : WRONG_WAIT_MS;
-    await new Promise(r => setTimeout(r, wait));
+    await waitAutoAdvance(wait);
   } else {
     $("nextRow").style.visibility = "visible";
     const res = await waitManual();

@@ -110,7 +110,21 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 }
 .q-example .ex-ja { color: var(--sub); font-size: 15px; font-weight: 400; display: block; }
 .q-example .ex-hl { color: #fdb022; font-weight: 800; } /* 例文中の出題語 */
-.q-syn { margin-top: 10px; min-height: 20px; font-size: 14px; color: var(--accent); }
+.q-syn { margin-top: 10px; min-height: 24px; font-size: 19px; font-weight: 600; color: var(--accent); }
+
+/* ===== 直近2問の履歴（画面下部に固定表示） ===== */
+.history-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 7px 16px calc(7px + env(safe-area-inset-bottom, 0px));
+  background: rgba(16, 24, 40, 0.94);
+  border-top: 1px solid #344054;
+  font-size: 12px;
+}
+.history-bar:empty { display: none; }
+.hist-item { color: var(--sub); }
+.hist-item.ok { color: var(--ok); }
+.hist-item.ng { color: var(--ng); }
 
 .btn-row { display: flex; gap: 10px; margin-bottom: 10px; }
 .ctl-btn {
@@ -127,6 +141,9 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 .wl-ipa { color: var(--accent); font-size: 13px; }
 .wl-count { color: var(--ng); font-size: 13px; margin-left: 6px; }
 
+/* 下部固定の履歴バーに隠れないよう余白を確保 */
+#session { padding-bottom: 60px; }
+
 /* ===== 縦長画面（折りたたみ時のカバーディスプレイ等） =====
    折りたたみ/展開でビューポートが変わると、メディアクエリにより自動で切り替わる */
 @media (max-width: 599px) {
@@ -134,7 +151,7 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
   #session {
     display: flex; flex-direction: column;
     min-height: 100vh; min-height: 100dvh;
-    padding-bottom: 24px;
+    padding-bottom: 70px;
   }
   #session .q-area {
     flex: 1; display: flex; flex-direction: column; justify-content: center;
