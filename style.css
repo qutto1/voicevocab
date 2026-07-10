@@ -143,10 +143,16 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 .ctl-btn:active { opacity: .8; }
 .ctl-btn.next { background: var(--accent); color: #0b1220; font-weight: 700; }
 
-#resultWrong, #wrongListBody { font-size: 15px; line-height: 2; }
+#resultWrong { font-size: 15px; line-height: 2; }
 #resultSummary { font-size: 17px; line-height: 1.9; }
+
+.wl-section { margin-bottom: 18px; }
+.wl-section:last-child { margin-bottom: 0; }
+.wl-section h3 { font-size: 14px; color: var(--accent); margin-bottom: 8px; font-weight: 700; }
+.wl-list { font-size: 15px; line-height: 2; }
+.wl-empty { color: var(--sub); font-size: 14px; }
 .wl-ipa { color: var(--accent); font-size: 13px; }
-.wl-count { color: var(--ng); font-size: 13px; margin-left: 6px; }
+.wl-count { color: var(--ng); font-size: 13px; margin-right: 6px; }
 
 /* 下部固定の履歴バー(3行)に隠れないよう余白を確保 */
 #session { padding-bottom: 90px; }
@@ -161,7 +167,10 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
     padding-bottom: 100px;
   }
   #session .q-area {
-    flex: 1; display: flex; flex-direction: column; justify-content: center;
+    /* justify-content:center だと回答時に増える要素(和訳・類義語・語源)の分だけ
+       全体が再センタリングされて上に動いて見えるため、上詰めにして下方向にのみ伸ばす */
+    flex: 1; display: flex; flex-direction: column; justify-content: flex-start;
+    padding-top: 6vh;
   }
   #session .controls { margin-top: auto; }
 }
@@ -202,5 +211,5 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
   .ctl-btn { padding: 18px 8px; font-size: 18px; }
   .history-bar { font-size: 17px; }
 
-  #wrongListBody { column-count: 2; column-gap: 28px; }
+  .wl-list { column-count: 2; column-gap: 28px; }
 }

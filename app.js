@@ -19,20 +19,23 @@ try { progress = JSON.parse(localStorage.getItem(PROG_KEY)) || {}; } catch (e) {
 
 function saveProgress() { localStorage.setItem(PROG_KEY, JSON.stringify(progress)); }
 function getProg(id) {
-  if (!progress[id]) progress[id] = { stage: -1, due: 0, right: 0, wrong: 0 }; // stage -1 = 未学習
+  // stage -1 = 未学習。rightE2J/wrongE2J/rightJ2E/wrongJ2Eは出題方向別の正誤数（間違えた問題リストの分割表示用）
+  if (!progress[id]) progress[id] = { stage: -1, due: 0, right: 0, wrong: 0, rightE2J: 0, wrongE2J: 0, rightJ2E: 0, wrongJ2E: 0 };
   return progress[id];
 }
 
-function recordAnswer(word, correct) {
+function recordAnswer(word, correct, dir) {
   const p = getProg(word.id);
   const now = Date.now();
   if (correct) {
     p.right++;
+    if (dir === "e2j") p.rightE2J = (p.rightE2J || 0) + 1; else p.rightJ2E = (p.rightJ2E || 0) + 1;
     p.stage = Math.min(p.stage + 1, INTERVALS_DAYS.length - 1);
     if (p.stage < 1) p.stage = 1;
     p.due = now + INTERVALS_DAYS[p.stage] * 24 * 60 * 60 * 1000;
   } else {
     p.wrong++;
+    if (dir === "e2j") p.wrongE2J = (p.wrongE2J || 0) + 1; else p.wrongJ2E = (p.wrongJ2E || 0) + 1;
     p.stage = 0;
     p.due = now + RELEARN_MS;
   }
@@ -370,7 +373,9 @@ function tokenMatches(exTok, tgtTok) {
   return false;
 }
 // 例文HTMLを生成し、出題語に当たる部分を <b class="ex-hl"> で強調する
-function exampleHtml(w) {
+// includeJa=false の場合、和訳(答えのヒントになる)は含めない
+function exampleHtml(w, includeJa) {
+  if (includeJa === undefined) includeJa = true;
   if (!w.ex) return "";
   const ex = w.ex;
   const tgt = w.en.split(/\s+/);
@@ -398,7 +403,8 @@ function exampleHtml(w) {
     pos = tk.end;
   });
   html += escapeHtml(ex.slice(pos));
-  return `${html}<span class="ex-ja">${escapeHtml(w.exJa || "")}</span>`;
+  if (includeJa) html += `<span class="ex-ja">${escapeHtml(w.exJa || "")}</span>`;
+  return html;
 }
 
 // 語源分解（部分 + 意味）を回答画面用のHTMLにする
@@ -415,17 +421,17 @@ function showQuestion(item) {
   const kindLabel = w.k === "w" ? "単語" : "熟語";
   $("qKind").textContent = `${dirLabel}・Lv${w.lv} ${kindLabel}`;
   $("qText").textContent = item.dir === "e2j" ? w.en : w.ja[0];
-  // 例文・発音記号・類義語は英語が答えになる和→英では出題時に隠し、回答後に表示する
-  // （英語が問題文の英→和は答えが日本語なので、出題時点から見せてよい）
+  // 英→和: 例文の英文と発音記号は出題時から見せてよいが、和訳(exJa)と類義語は
+  //        答え(日本語の意味)そのもののヒントになるため回答後まで隠す
+  // 和→英: 英語が答えになるため、例文・発音記号・類義語をすべて回答後まで隠す
   if (item.dir === "e2j") {
-    $("qExample").innerHTML = exampleHtml(w);
+    $("qExample").innerHTML = exampleHtml(w, false);
     $("qIpa").textContent = w.ipa || "";
-    $("qSynonyms").textContent = session.settings.showSyn && w.syn && w.syn.length ? "類義語: " + w.syn.join(", ") : "";
   } else {
     $("qExample").innerHTML = "";
     $("qIpa").textContent = "";
-    $("qSynonyms").textContent = "";
   }
+  $("qSynonyms").textContent = "";
   // 語源は「回答画面」専用の情報なので、出題時は常に隠す
   $("qEtym").innerHTML = "";
   $("heard").textContent = "";
@@ -483,10 +489,10 @@ async function runLoop() {
 
     if (outcome === "correct") {
       session.right++;
-      recordAnswer(item.word, true);
+      recordAnswer(item.word, true, item.dir);
     } else { // wrong / skip
       session.wrong++;
-      recordAnswer(item.word, false);
+      recordAnswer(item.word, false, item.dir);
       if (!session.wrongList.some(x => x.id === item.word.id)) session.wrongList.push(item.word);
       // セッション内で数問後にもう一度出題（忘却曲線の短期復習）
       if (!item.requeued) {
@@ -564,12 +570,11 @@ async function finishAnswer(item, correct, heardText) {
   if (heardText) $("heard").textContent = "🎤 " + heardText;
 
   const answerText = item.dir === "e2j" ? `${w.en} = ${w.ja[0]}` : `${w.ja[0]} = ${w.en}`;
-  // 和→英では出題時に隠していた例文・発音記号・類義語を回答後に表示する
-  if (item.dir === "j2e") {
-    $("qExample").innerHTML = exampleHtml(w);
-    if (w.ipa) $("qIpa").textContent = w.ipa;
-    if (s.showSyn && w.syn && w.syn.length) $("qSynonyms").textContent = "類義語: " + w.syn.join(", ");
-  }
+  // 出題時に隠していた情報を回答画面でまとめて表示する
+  // 英→和: 例文に和訳を追加＋類義語を表示 / 和→英: 例文・発音記号・類義語をすべて表示
+  $("qExample").innerHTML = exampleHtml(w, true);
+  if (item.dir === "j2e" && w.ipa) $("qIpa").textContent = w.ipa;
+  if (s.showSyn && w.syn && w.syn.length) $("qSynonyms").textContent = "類義語: " + w.syn.join(", ");
   // 語源分解は回答画面（両方向とも）で表示
   $("qEtym").innerHTML = etymHtml(w);
 
@@ -606,18 +611,28 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-// ===== 間違えた問題リスト =====
-function renderWrongList() {
+// ===== 間違えた問題リスト（英→和・和→英を分けて表示） =====
+// dir別に一覧HTMLを作る。各行は「回数(❌⭕) — 問題 → 解答」の順（数字を先に見せる）
+function wrongListSection(dir, title) {
+  const wrongKey = dir === "e2j" ? "wrongE2J" : "wrongJ2E";
+  const rightKey = dir === "e2j" ? "rightE2J" : "rightJ2E";
   const items = WORDS
     .map(w => ({ w, p: progress[w.id] }))
-    .filter(x => x.p && x.p.wrong > 0)
-    .sort((a, b) => b.p.wrong - a.p.wrong || a.w.en.localeCompare(b.w.en));
-  $("wrongListBody").innerHTML = items.length
-    ? items.map(({ w, p }) =>
-        `<div><b>${escapeHtml(w.en)}</b> ${w.ipa ? `<span class="wl-ipa">${escapeHtml(w.ipa)}</span>` : ""}` +
-        ` — ${escapeHtml(w.ja[0])}<span class="wl-count">❌${p.wrong} ⭕${p.right}</span></div>`
-      ).join("")
-    : "まだ間違えた問題はありません 🎉";
+    .filter(x => x.p && x.p[wrongKey] > 0)
+    .sort((a, b) => b.p[wrongKey] - a.p[wrongKey] || a.w.en.localeCompare(b.w.en));
+  const body = items.length
+    ? `<div class="wl-list">${items.map(({ w, p }) => {
+        const q = dir === "e2j" ? w.en : w.ja[0];
+        const a = dir === "e2j" ? w.ja[0] : w.en;
+        const ipa = dir === "e2j" && w.ipa ? ` <span class="wl-ipa">${escapeHtml(w.ipa)}</span>` : "";
+        return `<div><span class="wl-count">❌${p[wrongKey]} ⭕${p[rightKey] || 0}</span> <b>${escapeHtml(q)}</b>${ipa} — ${escapeHtml(a)}</div>`;
+      }).join("")}</div>`
+    : `<p class="wl-empty">なし 🎉</p>`;
+  return `<div class="wl-section"><h3>${title}</h3>${body}</div>`;
+}
+function renderWrongList() {
+  $("wrongListBody").innerHTML =
+    wrongListSection("e2j", "英→和") + wrongListSection("j2e", "和→英");
 }
 
 // ===== 結果画面 =====
