@@ -3,7 +3,7 @@
 
 "use strict";
 
-const APP_VERSION = "v9";
+const APP_VERSION = "v10";
 
 // ===== 間隔反復（忘却曲線） =====
 // stage n で正解 → 次回出題は INTERVALS_DAYS[n] 日後。不正解 → stage 0 に戻し10分後に再出題対象。
@@ -391,7 +391,9 @@ function endSession() {
 
 function setPhase(text, mic) {
   $("phase").textContent = text;
-  $("micIcon").classList.toggle("hidden", !mic);
+  // display:none だとマイクの分のスペースが消えてレイアウトがずれるため、
+  // 透明化(opacity)だけで表示/非表示を切り替えてスペースは常に確保しておく
+  $("micIcon").classList.toggle("idle", !mic);
 }
 
 // ===== 例文中の出題語ハイライト =====
@@ -424,10 +426,12 @@ function tokenMatches(exTok, tgtTok) {
   if (t.length >= 4 && e.startsWith(t.slice(0, 4))) return true; // 規則変化 (abandoned, carried...)
   return false;
 }
-// 例文HTMLを生成し、出題語に当たる部分を <b class="ex-hl"> で強調する
-// includeJa=false の場合、和訳(答えのヒントになる)は含めない
-function exampleHtml(w, includeJa) {
-  if (includeJa === undefined) includeJa = true;
+// 例文HTMLを生成し、出題語に当たる部分を <b class="ex-hl"> で強調する。
+// 答えのヒントになる部分は <span class="spoiler"> で包んでおき、実際に消す/挿入するのではなく
+// visibility切り替えだけで表示するため、正誤判定の前後でレイアウトが一切動かない。
+// e2j: 英文はそのまま見せてよいが、和訳(ex-ja)だけが答えのヒントになるのでspoiler化
+// j2e: 英語自体が答えになるため、例文全体をspoiler化
+function exampleHtml(w, dir) {
   if (!w.ex) return "";
   const ex = w.ex;
   const tgt = w.en.split(/\s+/);
@@ -448,21 +452,24 @@ function exampleHtml(w, includeJa) {
     if (ti === tgt.length) matched = picks;
   }
   const hl = new Set(matched || []);
-  let html = "", pos = 0;
+  let sentence = "", pos = 0;
   toks.forEach((tk, idx) => {
-    html += escapeHtml(ex.slice(pos, tk.start));
-    html += hl.has(idx) ? `<b class="ex-hl">${escapeHtml(tk.text)}</b>` : escapeHtml(tk.text);
+    sentence += escapeHtml(ex.slice(pos, tk.start));
+    sentence += hl.has(idx) ? `<b class="ex-hl">${escapeHtml(tk.text)}</b>` : escapeHtml(tk.text);
     pos = tk.end;
   });
-  html += escapeHtml(ex.slice(pos));
-  if (includeJa) html += `<span class="ex-ja">${escapeHtml(w.exJa || "")}</span>`;
-  return html;
+  sentence += escapeHtml(ex.slice(pos));
+  const jaSpan = `<span class="ex-ja spoiler">${escapeHtml(w.exJa || "")}</span>`;
+  if (dir === "e2j") return sentence + jaSpan;
+  return `<span class="spoiler">${sentence}${jaSpan}</span>`;
 }
 
-// 語源分解（部分 + 意味）を回答画面用のHTMLにする
+// 語源分解（部分 + 意味、意味は部分の下に表示）を回答画面用のHTMLにする
 function etymHtml(w) {
   if (!w.etym || !w.etym.length) return "";
-  const glosses = w.etym.map(([p, m]) => `<span class="etym-part"><b>${escapeHtml(p)}</b> ${escapeHtml(m)}</span>`).join("");
+  const glosses = w.etym.map(([p, m]) =>
+    `<span class="etym-part"><b>${escapeHtml(p)}</b><span class="etym-m">${escapeHtml(m)}</span></span>`
+  ).join("");
   return `<div class="etym-gloss">${glosses}</div>`;
 }
 
@@ -472,19 +479,25 @@ function showQuestion(item) {
   const kindLabel = w.k === "w" ? "単語" : "熟語";
   $("qKind").textContent = `${dirLabel}・Lv${w.lv} ${kindLabel}`;
   $("qText").textContent = item.dir === "e2j" ? w.en : w.ja[0];
-  // 英→和: 例文の英文と発音記号は出題時から見せてよいが、和訳(exJa)と類義語は
-  //        答え(日本語の意味)そのもののヒントになるため回答後まで隠す
-  // 和→英: 英語が答えになるため、例文・発音記号・類義語をすべて回答後まで隠す
-  if (item.dir === "e2j") {
-    $("qExample").innerHTML = exampleHtml(w, false);
-    $("qIpa").textContent = w.ipa || "";
-  } else {
-    $("qExample").innerHTML = "";
-    $("qIpa").textContent = "";
-  }
-  $("qSynonyms").textContent = "";
-  // 語源は「回答画面」専用の情報なので、出題時は常に隠す
-  $("qEtym").innerHTML = "";
+
+  // 回答画面でしか見せない情報（和訳・類義語・語源、和→英の場合は例文と発音記号も）は
+  // 最初から最終的な内容までレンダリングしておき、spoilerクラス(visibility:hidden)で隠す。
+  // 正誤判定のタイミングでDOMに要素を足し引きするとレイアウトが動いてしまうため、
+  // 「表示するかどうか」だけを切り替えて位置がずれないようにしている。
+  $("qExample").innerHTML = exampleHtml(w, item.dir);
+
+  const ipa = w.ipa || "";
+  $("qIpa").textContent = ipa;
+  $("qIpa").classList.toggle("spoiler", item.dir === "j2e" && !!ipa);
+
+  const synText = session.settings.showSyn && w.syn && w.syn.length ? "類義語: " + w.syn.join(", ") : "";
+  $("qSynonyms").textContent = synText;
+  $("qSynonyms").classList.toggle("spoiler", !!synText);
+
+  const etym = etymHtml(w);
+  $("qEtym").innerHTML = etym;
+  $("qEtym").classList.toggle("spoiler", !!etym);
+
   $("heard").textContent = "";
   $("verdict").textContent = "";
   $("verdict").className = "verdict";
@@ -494,7 +507,7 @@ function showQuestion(item) {
   // 「回答してください」の案内文とマイクアイコンは、音声認識を開始する前から
   // 表示しておく（認識開始の瞬間に出すとレイアウトがずれてしまうため）
   $("phase").textContent = item.dir === "e2j" ? "日本語で答えてください" : "英語で答えてください";
-  $("micIcon").classList.remove("hidden");
+  $("micIcon").classList.remove("idle");
 }
 
 // 手動ボタン割り込み。runLoop 内の待機を解決する
@@ -623,14 +636,13 @@ async function finishAnswer(item, correct, heardText) {
   const v = $("verdict");
   if (heardText) $("heard").textContent = "🎤 " + heardText;
 
-  const answerText = item.dir === "e2j" ? `${w.en} = ${w.ja[0]}` : `${w.ja[0]} = ${w.en}`;
-  // 出題時に隠していた情報を回答画面でまとめて表示する
-  // 英→和: 例文に和訳を追加＋類義語を表示 / 和→英: 例文・発音記号・類義語をすべて表示
-  $("qExample").innerHTML = exampleHtml(w, true);
-  if (item.dir === "j2e" && w.ipa) $("qIpa").textContent = w.ipa;
-  if (s.showSyn && w.syn && w.syn.length) $("qSynonyms").textContent = "類義語: " + w.syn.join(", ");
-  // 語源分解は回答画面（両方向とも）で表示
-  $("qEtym").innerHTML = etymHtml(w);
+  const answerText = item.dir === "e2j" ? w.ja[0] : w.en;
+  // 出題時からレンダリング済みの和訳・発音記号・類義語・語源をここで見えるようにする
+  // （中身は変えず、spoilerクラスを外すだけなのでレイアウトは動かない）
+  $("qExample").querySelectorAll(".spoiler").forEach(el => el.classList.remove("spoiler"));
+  $("qIpa").classList.remove("spoiler");
+  $("qSynonyms").classList.remove("spoiler");
+  $("qEtym").classList.remove("spoiler");
 
   if (correct) {
     v.textContent = "⭕ 正解！";
@@ -679,7 +691,8 @@ function wrongListSection(dir, title) {
         const q = dir === "e2j" ? w.en : w.ja[0];
         const a = dir === "e2j" ? w.ja[0] : w.en;
         const ipa = dir === "e2j" && w.ipa ? ` <span class="wl-ipa">${escapeHtml(w.ipa)}</span>` : "";
-        return `<div><span class="wl-count">❌${p[wrongKey]} ⭕${p[rightKey] || 0}</span> <b>${escapeHtml(q)}</b>${ipa} — ${escapeHtml(a)}</div>`;
+        const synLine = w.syn && w.syn.length ? `<div class="wl-syn">類義語: ${escapeHtml(w.syn.join(", "))}</div>` : "";
+        return `<div class="wl-item"><div><span class="wl-count">❌${p[wrongKey]} ⭕${p[rightKey] || 0}</span> <b>${escapeHtml(q)}</b>${ipa} — ${escapeHtml(a)}</div>${synLine}</div>`;
       }).join("")}</div>`
     : `<p class="wl-empty">なし 🎉</p>`;
   return `<div class="wl-section"><h3>${title}</h3>${body}</div>`;

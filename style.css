@@ -20,6 +20,9 @@ body {
 
 .screen { max-width: 520px; margin: 0 auto; padding: 20px 16px 40px; }
 .hidden { display: none !important; }
+/* 回答するまで隠す要素。display:noneではなくvisibilityで隠すことでスペースは確保したままにし、
+   正誤判定の前後で例文やボタンなどの位置がずれないようにする */
+.spoiler { visibility: hidden; }
 
 h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 .sub { text-align: center; color: var(--sub); margin-bottom: 20px; font-size: 14px; }
@@ -95,14 +98,19 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
   color: var(--accent); font-size: 20px; margin-bottom: 12px; min-height: 26px;
   font-family: "Segoe UI", "Noto Sans", sans-serif;
 }
-.phase { color: var(--sub); font-size: 15px; min-height: 22px; }
+.phase { color: var(--sub); font-size: 15px; min-height: 22px; line-height: 22px; }
 .mic {
   font-size: 40px; margin-top: 10px;
   animation: pulse 1s infinite;
 }
+/* display:noneではなくopacityで隠す。マイク分のスペースを常に確保し、
+   認識の開始/終了でレイアウトが動かないようにする */
+.mic.idle { opacity: 0; animation: none; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
-.heard { color: var(--sub); font-size: 16px; margin-top: 12px; min-height: 24px; }
-.verdict { font-size: 30px; font-weight: 800; margin-top: 10px; min-height: 44px; }
+.heard { color: var(--sub); font-size: 16px; margin-top: 12px; min-height: 24px; line-height: 24px; }
+/* line-heightを明示指定して固定（絵文字は行の高さがフォントごとに微妙に違うため、
+   min-heightだけだと正誤判定の前後で1〜3px程度レイアウトがずれることがあった） */
+.verdict { font-size: 30px; font-weight: 800; margin-top: 10px; min-height: 44px; line-height: 44px; }
 .verdict.ok { color: var(--ok); }
 .verdict.ng { color: var(--ng); }
 .q-example {
@@ -115,9 +123,10 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 
 /* ===== 語源分解（回答画面で表示） ===== */
 .q-etym { margin-top: 14px; min-height: 20px; }
-.etym-gloss { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; }
-.etym-part { font-size: 19px; color: var(--sub); }
+.etym-gloss { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 20px; }
+.etym-part { display: flex; flex-direction: column; align-items: center; font-size: 19px; color: var(--sub); }
 .etym-part b { color: #fdb022; font-weight: 800; }
+.etym-part .etym-m { font-size: 13px; margin-top: 2px; }
 
 /* ===== 直近3問の履歴（画面下部に固定表示） ===== */
 .history-bar {
@@ -155,10 +164,12 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 .wl-section { margin-bottom: 18px; }
 .wl-section:last-child { margin-bottom: 0; }
 .wl-section h3 { font-size: 14px; color: var(--accent); margin-bottom: 8px; font-weight: 700; }
-.wl-list { font-size: 15px; line-height: 2; }
+.wl-list { font-size: 15px; line-height: 1.6; }
+.wl-item { margin-bottom: 10px; break-inside: avoid; -webkit-column-break-inside: avoid; }
 .wl-empty { color: var(--sub); font-size: 14px; }
 .wl-ipa { color: var(--accent); font-size: 13px; }
 .wl-count { color: var(--ng); font-size: 13px; margin-right: 6px; }
+.wl-syn { color: var(--accent); font-size: 13px; margin-top: 2px; padding-left: 2px; }
 
 /* 下部固定の履歴バー(3行)に隠れないよう余白を確保 */
 #session { padding-bottom: 90px; }
@@ -211,6 +222,7 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
   .q-example .ex-ja { font-size: 18px; }
   .q-syn { font-size: 22px; }
   .etym-part { font-size: 24px; }
+  .etym-part .etym-m { font-size: 16px; }
   .heard { font-size: 19px; }
   .controls { max-width: 640px; margin: 0 auto; }
   .ctl-btn { padding: 18px 8px; font-size: 18px; }
