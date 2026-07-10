@@ -3,13 +3,14 @@
 
 "use strict";
 
-const APP_VERSION = "v10";
+const APP_VERSION = "v11";
 
 // ===== 間隔反復（忘却曲線） =====
 // stage n で正解 → 次回出題は INTERVALS_DAYS[n] 日後。不正解 → stage 0 に戻し10分後に再出題対象。
 const INTERVALS_DAYS = [0, 1, 3, 7, 14, 30, 60, 120];
 const RELEARN_MS = 10 * 60 * 1000;      // 不正解後の再出題間隔
 const REQUEUE_GAP = 4;                   // セッション内で間違えた問題を何問後に再出題するか
+const LISTEN_TIMEOUT_MS = 11000;         // 音声認識の待機時間（再試行を廃止した分、長めに確保）
 const WRONG_WAIT_MS = 5000;              // 不正解後、次の問題までの待機時間
 const CORRECT_WAIT_MS = 700;             // 正解後、次の問題までの待機時間（通常）
 const CORRECT_WAIT_SYN_MS = 2000;        // 正解後の待機時間（類義語表示オプションON時）
@@ -22,7 +23,14 @@ try { progress = JSON.parse(localStorage.getItem(PROG_KEY)) || {}; } catch (e) {
 function saveProgress() { localStorage.setItem(PROG_KEY, JSON.stringify(progress)); }
 function getProg(id) {
   // stage -1 = 未学習。rightE2J/wrongE2J/rightJ2E/wrongJ2Eは出題方向別の正誤数（間違えた問題リストの分割表示用）
-  if (!progress[id]) progress[id] = { stage: -1, due: 0, right: 0, wrong: 0, rightE2J: 0, wrongE2J: 0, rightJ2E: 0, wrongJ2E: 0 };
+  // lastWrongE2J/lastWrongJ2Eはその方向で最後に間違えた時刻（間違えた問題リストの「最近順」表示用）
+  if (!progress[id]) {
+    progress[id] = {
+      stage: -1, due: 0, right: 0, wrong: 0,
+      rightE2J: 0, wrongE2J: 0, rightJ2E: 0, wrongJ2E: 0,
+      lastWrongE2J: 0, lastWrongJ2E: 0,
+    };
+  }
   return progress[id];
 }
 
@@ -37,7 +45,8 @@ function recordAnswer(word, correct, dir) {
     p.due = now + INTERVALS_DAYS[p.stage] * 24 * 60 * 60 * 1000;
   } else {
     p.wrong++;
-    if (dir === "e2j") p.wrongE2J = (p.wrongE2J || 0) + 1; else p.wrongJ2E = (p.wrongJ2E || 0) + 1;
+    if (dir === "e2j") { p.wrongE2J = (p.wrongE2J || 0) + 1; p.lastWrongE2J = now; }
+    else { p.wrongJ2E = (p.wrongJ2E || 0) + 1; p.lastWrongJ2E = now; }
     p.stage = 0;
     p.due = now + RELEARN_MS;
   }
@@ -335,19 +344,20 @@ function waitAutoAdvance(ms) {
   });
 }
 
-// ===== 直近3問の履歴表示 =====
+// ===== 直近3問の履歴表示（間違えた問題のみ） =====
 const HISTORY_SIZE = 3;
 function pushHistory(item, correct) {
+  if (correct) return; // 履歴には間違えた問題だけを表示する
   const w = item.word;
   const q = item.dir === "e2j" ? w.en : w.ja[0];
   const a = item.dir === "e2j" ? w.ja[0] : w.en;
-  session.history.unshift({ q, a, correct });
+  session.history.unshift({ q, a });
   session.history.length = Math.min(session.history.length, HISTORY_SIZE);
   renderHistory();
 }
 function renderHistory() {
   $("historyBar").innerHTML = session.history.map(h =>
-    `<span class="hist-item ${h.correct ? "ok" : "ng"}">${h.correct ? "⭕" : "❌"} ${escapeHtml(h.q)} → ${escapeHtml(h.a)}</span>`
+    `<span class="hist-item ng">❌ ${escapeHtml(h.q)} → ${escapeHtml(h.a)}</span>`
   ).join("");
 }
 
@@ -588,38 +598,30 @@ async function askOne(item) {
     if (!session.active) return "quit";
   }
 
-  // 回答の聞き取り（無音なら1回だけ促して再挑戦）
-  for (let attempt = 0; attempt < 2; attempt++) {
-    setPhase(item.dir === "e2j" ? "日本語で答えてください" : "英語で答えてください", true);
-    const res = await listenInterruptible(answerLang, 8000);
-    setPhase("", false);
-    if (!session.active) return "quit";
+  // 回答の聞き取り。「もう一度どうぞ」の再試行は行わず、その分認識時間を長めに取る
+  setPhase(item.dir === "e2j" ? "日本語で答えてください" : "英語で答えてください", true);
+  const res = await listenInterruptible(answerLang, LISTEN_TIMEOUT_MS);
+  setPhase("", false);
+  if (!session.active) return "quit";
 
-    if (res.manual) return await handleManual(res.manual, item);
-    if (res.error === "unsupported") { alert("このブラウザは音声認識に対応していません。Android版Chromeをご利用ください。"); return "quit"; }
-    if (res.error === "not-allowed" || res.error === "service-not-allowed") {
-      alert("マイクの使用が許可されていません。ブラウザの設定でマイクを許可してください。");
-      return "quit";
-    }
-
-    if (res.noSpeech || res.error) {
-      if (attempt === 0) {
-        if (s.speakQ) await speak("もう一度どうぞ", "ja-JP", 1.1);
-        continue;
-      }
-      // 2回無音 → 不正解扱い
-      return await finishAnswer(item, false, "（聞き取れませんでした）");
-    }
-
-    $("heard").textContent = "🎤 " + res.texts[0];
-    const cmd = detectCommand(res.texts, item.dir);
-    if (cmd === "skip") return "skip";
-    if (cmd === "repeat") return "repeat";
-    if (cmd === "quit") return "quit";
-
-    return await finishAnswer(item, await isCorrect(w, res.texts, item.dir), res.texts[0]);
+  if (res.manual) return await handleManual(res.manual, item);
+  if (res.error === "unsupported") { alert("このブラウザは音声認識に対応していません。Android版Chromeをご利用ください。"); return "quit"; }
+  if (res.error === "not-allowed" || res.error === "service-not-allowed") {
+    alert("マイクの使用が許可されていません。ブラウザの設定でマイクを許可してください。");
+    return "quit";
   }
-  return "wrong";
+
+  if (res.noSpeech || res.error) {
+    return await finishAnswer(item, false, "（聞き取れませんでした）");
+  }
+
+  $("heard").textContent = "🎤 " + res.texts[0];
+  const cmd = detectCommand(res.texts, item.dir);
+  if (cmd === "skip") return "skip";
+  if (cmd === "repeat") return "repeat";
+  if (cmd === "quit") return "quit";
+
+  return await finishAnswer(item, await isCorrect(w, res.texts, item.dir), res.texts[0]);
 }
 
 async function handleManual(action, item) {
@@ -678,14 +680,20 @@ function escapeHtml(s) {
 }
 
 // ===== 間違えた問題リスト（英→和・和→英を分けて表示） =====
+// "count" = 間違えた回数順（多い順） / "recent" = 最近間違えた順
+let wrongSortMode = "count";
+
 // dir別に一覧HTMLを作る。各行は「回数(❌⭕) — 問題 → 解答」の順（数字を先に見せる）
 function wrongListSection(dir, title) {
   const wrongKey = dir === "e2j" ? "wrongE2J" : "wrongJ2E";
   const rightKey = dir === "e2j" ? "rightE2J" : "rightJ2E";
+  const lastWrongKey = dir === "e2j" ? "lastWrongE2J" : "lastWrongJ2E";
   const items = WORDS
     .map(w => ({ w, p: progress[w.id] }))
     .filter(x => x.p && x.p[wrongKey] > 0)
-    .sort((a, b) => b.p[wrongKey] - a.p[wrongKey] || a.w.en.localeCompare(b.w.en));
+    .sort((a, b) => wrongSortMode === "recent"
+      ? (b.p[lastWrongKey] || 0) - (a.p[lastWrongKey] || 0)
+      : b.p[wrongKey] - a.p[wrongKey] || a.w.en.localeCompare(b.w.en));
   const body = items.length
     ? `<div class="wl-list">${items.map(({ w, p }) => {
         const q = dir === "e2j" ? w.en : w.ja[0];
@@ -698,6 +706,8 @@ function wrongListSection(dir, title) {
   return `<div class="wl-section"><h3>${title}</h3>${body}</div>`;
 }
 function renderWrongList() {
+  $("sortCountBtn").classList.toggle("active", wrongSortMode === "count");
+  $("sortRecentBtn").classList.toggle("active", wrongSortMode === "recent");
   $("wrongListBody").innerHTML =
     wrongListSection("e2j", "英→和") + wrongListSection("j2e", "和→英");
 }
@@ -718,10 +728,17 @@ $("startBtn").addEventListener("click", startSession);
 $("quitBtn").addEventListener("click", () => manualAction("quit") || (session.active && endSession()));
 $("repeatBtn").addEventListener("click", () => manualAction("repeat"));
 $("skipBtn").addEventListener("click", () => manualAction("skip"));
+// 一時停止ボタンは長押しで反応するが、テキストとして選択可能だと長押しでブラウザの
+// 文字選択モードに入ってしまい、pointerイベントが途中でキャンセルされて一時停止が効かなくなる。
+// pointerdown / contextmenu のデフォルト動作を止めて選択・メニューが発生しないようにする。
+$("pauseBtn").addEventListener("pointerdown", e => e.preventDefault());
+$("pauseBtn").addEventListener("contextmenu", e => e.preventDefault());
 $("nextBtn").addEventListener("click", () => manualAction("next"));
 $("backBtn").addEventListener("click", () => { renderStats(); showScreen("setup"); });
 $("wrongListBtn").addEventListener("click", () => { renderWrongList(); showScreen("wrong"); });
 $("wrongBackBtn").addEventListener("click", () => { renderStats(); showScreen("setup"); });
+$("sortCountBtn").addEventListener("click", () => { wrongSortMode = "count"; renderWrongList(); });
+$("sortRecentBtn").addEventListener("click", () => { wrongSortMode = "recent"; renderWrongList(); });
 
 // 画面復帰時にウェイクロックを取り直す
 document.addEventListener("visibilitychange", () => {

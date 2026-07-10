@@ -124,9 +124,9 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 /* ===== 語源分解（回答画面で表示） ===== */
 .q-etym { margin-top: 14px; min-height: 20px; }
 .etym-gloss { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 20px; }
-.etym-part { display: flex; flex-direction: column; align-items: center; font-size: 19px; color: var(--sub); }
+.etym-part { display: flex; flex-direction: column; align-items: center; font-size: 25px; color: var(--sub); }
 .etym-part b { color: #fdb022; font-weight: 800; }
-.etym-part .etym-m { font-size: 13px; margin-top: 2px; }
+.etym-part .etym-m { font-size: 17px; margin-top: 4px; }
 
 /* ===== 直近3問の履歴（画面下部に固定表示） ===== */
 .history-bar {
@@ -154,12 +154,25 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 .ctl-btn.pause {
   background: transparent; color: var(--accent);
   border: 2px dashed var(--accent);
+  padding-top: 24px; padding-bottom: 24px; /* 他のボタンより高くして押しやすく */
+  /* 長押しで文字選択やコンテキストメニューが出るとpointerイベントが途切れ、
+     一時停止が効かなくなるため、選択・タッチの既定動作を止めておく */
+  user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
 }
 /* 押している間だけ強調表示（実際の一時停止処理はグローバルなpointerdown/upで行う） */
 .ctl-btn.pause:active { background: var(--accent); color: #0b1220; opacity: 1; border-style: solid; }
 
 #resultWrong { font-size: 15px; line-height: 2; }
 #resultSummary { font-size: 17px; line-height: 1.9; }
+
+.wl-sort-toggle { display: flex; gap: 8px; justify-content: center; margin-bottom: 16px; }
+.sort-chip {
+  padding: 9px 16px; border-radius: 999px; border: none;
+  background: #344054; color: var(--sub); font-size: 14px; font-weight: 600;
+}
+.sort-chip.active { background: var(--accent); color: #0b1220; }
 
 .wl-section { margin-bottom: 18px; }
 .wl-section:last-child { margin-bottom: 0; }
@@ -221,8 +234,8 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
   .q-example { font-size: 28px; }
   .q-example .ex-ja { font-size: 18px; }
   .q-syn { font-size: 22px; }
-  .etym-part { font-size: 24px; }
-  .etym-part .etym-m { font-size: 16px; }
+  .etym-part { font-size: 32px; }
+  .etym-part .etym-m { font-size: 21px; }
   .heard { font-size: 19px; }
   .controls { max-width: 640px; margin: 0 auto; }
   .ctl-btn { padding: 18px 8px; font-size: 18px; }

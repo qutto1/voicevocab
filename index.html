@@ -61,7 +61,7 @@
     <h2>オプション</h2>
     <label class="opt"><input type="checkbox" id="optSpeak" checked> 問題を読み上げる（ハンズフリー用）</label>
     <label class="opt"><input type="checkbox" id="optAuto" checked> 自動で次の問題へ進む</label>
-    <label class="opt"><input type="checkbox" id="optSyn"> 類義語を表示する</label>
+    <label class="opt"><input type="checkbox" id="optSyn" checked> 類義語を表示する</label>
   </div>
 
   <div class="card stats" id="statsCard">
@@ -113,7 +113,10 @@
 <!-- ===== 間違えた問題リスト画面 ===== -->
 <div id="wrongScreen" class="screen hidden">
   <h1>❌ 間違えた問題</h1>
-  <p class="sub">間違えた回数が多い順</p>
+  <div class="wl-sort-toggle">
+    <button id="sortCountBtn" type="button" class="sort-chip active">間違えた回数順</button>
+    <button id="sortRecentBtn" type="button" class="sort-chip">最近順</button>
+  </div>
   <div class="card"><div id="wrongListBody">-</div></div>
   <button id="wrongBackBtn" class="big-btn">設定に戻る</button>
 </div>
