@@ -1,5 +1,5 @@
 // オフラインキャッシュ（音声認識自体はオンライン必須）
-const CACHE = "voicevocab-v13";
+const CACHE = "voicevocab-v14";
 const ASSETS = [
   "./", "./index.html", "./style.css", "./app.js", "./words.js", "./manifest.json", "./icon.svg",
   "./lib/kuromoji/kuromoji.js",

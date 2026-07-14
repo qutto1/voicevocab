@@ -3,22 +3,24 @@
 
 "use strict";
 
-const APP_VERSION = "v13";
+const APP_VERSION = "v14";
 
 // ===== 間隔反復（忘却曲線） =====
 // stage n で正解 → 次回出題は INTERVALS_DAYS[n] 日後。不正解 → stage 0 に戻し10分後に再出題対象。
 const INTERVALS_DAYS = [0, 1, 3, 7, 14, 30, 60, 120];
 const RELEARN_MS = 10 * 60 * 1000;      // 不正解後の再出題間隔
 const REQUEUE_GAP = 4;                   // セッション内で間違えた問題を何問後に再出題するか
-const LISTEN_TIMEOUT_MS = 11000;         // 音声認識の待機時間（再試行を廃止した分、長めに確保）
+const DEFAULT_TIMEOUT_MS = 6000;         // 音声認識の待機時間の既定（設定画面で変更可）
+const REASK_LIMIT = 2;                   // 音声は検知したが解析できなかったとき「もう一度」を促す最大回数
 const NO_SPEECH_STREAK_LIMIT = 5;        // 何回連続で無反応だったら一時中断するか（タッチや発話があればカウントしない）
 const WRONG_WAIT_MS = 5000;              // 不正解後、次の問題までの待機時間
 const CORRECT_WAIT_MS = 700;             // 正解後、次の問題までの待機時間（通常）
 const CORRECT_WAIT_SYN_MS = 2000;        // 正解後の待機時間（類義語表示オプションON時）
 const PROG_KEY = "vv_progress_v1";
-const SETTINGS_KEY = "vv_settings_v4";   // ミックス廃止・Lv1/2統合・発音記号オプション追加のためv4
-const RECENT_KEY = "vv_recent_v1";       // ランク算出用の直近回答ログ
+const SETTINGS_KEY = "vv_settings_v4";   // 設定はcookieに保存（キー名は流用）
+const RANK_KEY = "vv_rank_v2";           // ランク算出用データ（出題方向別）
 const RECENT_MAX = 50;                   // ランクは直近この問数の正答率とレベルから算出
+const RANK_HIST_MAX = 10;                // 結果画面のグラフに残すランク履歴の数
 
 let progress = {};   // { id: {stage, due, right, wrong} }
 try { progress = JSON.parse(localStorage.getItem(PROG_KEY)) || {}; } catch (e) { progress = {}; }
@@ -37,26 +39,50 @@ function getProg(id) {
   return progress[id];
 }
 
-// ===== ランク（直近RECENT_MAX問の正答率とレベルから算出） =====
+// ===== ランク（直近RECENT_MAX問の正答率とレベルから算出、出題方向別） =====
 // ランク = 平均レベル × 正答率 × 2（0.1〜9.9、Lv5を全問正解したときだけ10）
-let recentLog = [];  // [{lv, ok}] 直近の回答（古い順）
-try { recentLog = JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch (e) { recentLog = []; }
-function pushRecent(lv, ok) {
-  recentLog.push({ lv, ok: ok ? 1 : 0 });
-  if (recentLog.length > RECENT_MAX) recentLog = recentLog.slice(-RECENT_MAX);
-  localStorage.setItem(RECENT_KEY, JSON.stringify(recentLog));
+// 英→和 (e2j) と 和→英 (j2e) を独立に扱い、それぞれ直近の回答ログ recent と
+// セッション終了ごとのランク履歴 hist（結果画面のグラフ用）を持つ。
+let rankData = { e2j: { recent: [], hist: [] }, j2e: { recent: [], hist: [] } };
+try {
+  const r = JSON.parse(localStorage.getItem(RANK_KEY));
+  if (r && r.e2j && r.j2e) rankData = r;
+} catch (e) {}
+function saveRank() { localStorage.setItem(RANK_KEY, JSON.stringify(rankData)); }
+function pushRankRecent(dir, lv, ok) {
+  const d = rankData[dir];
+  d.recent.push({ lv, ok: ok ? 1 : 0 });
+  if (d.recent.length > RECENT_MAX) d.recent = d.recent.slice(-RECENT_MAX);
+  saveRank();
 }
-function currentRank() {
-  if (!recentLog.length) return 0.1;
+// 直近ログからランク値を計算する（ログがなければ null）
+function computeRank(dir) {
+  const rec = rankData[dir].recent;
+  if (!rec.length) return null;
   let lvSum = 0, okSum = 0;
-  for (const r of recentLog) { lvSum += r.lv; okSum += r.ok; }
-  const rank = (lvSum / recentLog.length) * (okSum / recentLog.length) * 2;
+  for (const r of rec) { lvSum += r.lv; okSum += r.ok; }
+  const rank = (lvSum / rec.length) * (okSum / rec.length) * 2;
   return Math.max(0.1, Math.min(10, Math.round(rank * 10) / 10));
 }
-function fmtRank(r) { return r >= 10 ? "10" : r.toFixed(1); }
+// セッション終了時に現在のランクを履歴に確定する（グラフ用）
+function commitRank(dir) {
+  const r = computeRank(dir);
+  if (r == null) return;
+  const h = rankData[dir].hist;
+  h.push(r);
+  if (h.length > RANK_HIST_MAX) rankData[dir].hist = h.slice(-RANK_HIST_MAX);
+  saveRank();
+}
+// 表示用の現在ランク = 直近に確定した履歴の末尾。未確定なら null（「--」表示）
+function displayRank(dir) {
+  const h = rankData[dir].hist;
+  return h.length ? h[h.length - 1] : null;
+}
+function fmtRank(r) { return r == null ? "--" : (r >= 10 ? "10" : r.toFixed(1)); }
 
 function recordAnswer(word, correct, dir) {
-  pushRecent(word.lv, correct);
+  // 「間違えた問題」への挑戦（noRank）ではランクを変えない
+  if (!session.noRank) pushRankRecent(dir, word.lv, correct);
   const p = getProg(word.id);
   const now = Date.now();
   if (correct) {
@@ -270,20 +296,25 @@ function speak(text, lang, rate) {
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let activeRec = null;
 
-// 1回分の聞き取り。resolve: {texts:[...]} / {noSpeech:true} / {error:msg}
+// 1回分の聞き取り。resolve: {texts:[...]} / {sound:true} / {noSpeech:true} / {error:msg}
+// - {texts}   : 文字として認識できた
+// - {sound}   : 発話（音声）は検知したが文字として解析できなかった → 呼び出し側で「もう一度」を促す
+// - {noSpeech}: 発話が検知されないままタイムアウト
 // 周囲のノイズが多いと、認識エンジンがタイムアウト前に勝手に打ち切って no-speech を
-// 返してくることがある（「聞き取れない」誤判定の原因）。そこで認識が途中で終わっても
-// こちらのタイムアウトが来るまでは認識を張り直し、待機時間いっぱい聞き続ける。
+// 返してくることがある（「聞き取れない」誤判定の原因）。そこで発話が検知されないまま終わった
+// 場合はタイムアウトまで認識を張り直して聞き続ける。発話が検知されたのに解析できなかった場合は
+// {sound} を返し、呼び出し側で「もう一度」と促す。
 function listen(lang, timeoutMs) {
   return new Promise(resolve => {
     if (!SR) return resolve({ error: "unsupported" });
-    const deadline = Date.now() + (timeoutMs || 8000);
+    const deadline = Date.now() + (timeoutMs || DEFAULT_TIMEOUT_MS);
     let settled = false;
     let rec = null;
+    let sawSpeech = false; // この聞き取りの間に発話（音声）を検知したか
     // stopListening から外部中断できるよう、コントローラを activeRec に置く
     const ctl = { abort() { finish({ noSpeech: true }); } };
     activeRec = ctl;
-    const timer = setTimeout(() => finish({ noSpeech: true }), timeoutMs || 8000);
+    const timer = setTimeout(() => finish(sawSpeech ? { sound: true } : { noSpeech: true }), timeoutMs || DEFAULT_TIMEOUT_MS);
     const finish = v => {
       if (settled) return;
       settled = true;
@@ -292,10 +323,12 @@ function listen(lang, timeoutMs) {
       if (rec) { try { rec.abort(); } catch (e) {} }
       resolve(v);
     };
-    const restart = () => {
+    const endOrRestart = () => {
       if (settled) return;
-      // 残り時間がわずかなら張り直さずに無音として終える
-      if (Date.now() >= deadline - 500) return finish({ noSpeech: true });
+      // 発話を検知していたら「解析できなかった」として即座に返す（もう一度を促すため）
+      if (sawSpeech) return finish({ sound: true });
+      // 無音のまま終わった場合、残り時間があれば張り直して聞き続ける（ノイズ対策）
+      if (Date.now() >= deadline - 400) return finish({ noSpeech: true });
       startRec();
     };
     const startRec = () => {
@@ -303,17 +336,22 @@ function listen(lang, timeoutMs) {
       rec.lang = lang;
       rec.interimResults = false;
       rec.maxAlternatives = 5;
+      rec.onspeechstart = () => { sawSpeech = true; };
       rec.onresult = ev => {
         const texts = [];
         const res = ev.results[ev.results.length - 1];
-        for (let i = 0; i < res.length; i++) texts.push(res[i].transcript);
-        finish({ texts });
+        for (let i = 0; i < res.length; i++) {
+          const t = res[i].transcript.trim();
+          if (t) texts.push(t);
+        }
+        if (texts.length) finish({ texts });
+        else { sawSpeech = true; finish({ sound: true }); }
       };
       rec.onerror = ev => {
-        if (ev.error === "no-speech" || ev.error === "aborted") restart();
+        if (ev.error === "no-speech" || ev.error === "aborted") endOrRestart();
         else finish({ error: ev.error });
       };
-      rec.onend = () => restart();
+      rec.onend = () => endOrRestart();
       try { rec.start(); } catch (e) { finish({ error: String(e) }); }
     };
     startRec();
@@ -331,30 +369,40 @@ function showScreen(name) {
   for (const k in screens) screens[k].classList.toggle("hidden", k !== name);
 }
 
-// ===== 設定の保存・復元 =====
+// ===== 設定の保存・復元（cookieに保存） =====
+function setCookie(name, value, days) {
+  const exp = new Date(Date.now() + days * 864e5).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)};expires=${exp};path=/;SameSite=Lax`;
+}
+function getCookie(name) {
+  const m = document.cookie.match(new RegExp("(?:^|; )" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "=([^;]*)"));
+  return m ? decodeURIComponent(m[1]) : null;
+}
 function readSettings() {
-  // Lv1・2統合チップは value="1,2" のようにカンマ区切りで複数レベルを持つ
+  // Lv1〜4チップは value="1,2" のようにカンマ区切りで実データのレベル(1〜5)を持つ
   const levels = [...document.querySelectorAll("#levelChips input:checked")]
     .flatMap(i => i.value.split(",").map(Number));
   const kinds = [...document.querySelectorAll("#kindChips input:checked")].map(i => i.value);
   const mode = document.querySelector("#modeChips input:checked").value;
   const count = +document.querySelector("#countChips input:checked").value;
+  const timeout = +document.querySelector("#timeoutChips input:checked").value * 1000;
   return {
-    levels, kinds, mode, count,
+    levels, kinds, mode, count, timeout,
     speakQ: $("optSpeak").checked, auto: $("optAuto").checked,
     showSyn: $("optSyn").checked, showIpa: $("optIpa").checked,
   };
 }
-function persistSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
+function persistSettings(s) { setCookie(SETTINGS_KEY, JSON.stringify(s), 365); }
 function restoreSettings() {
   let s;
-  try { s = JSON.parse(localStorage.getItem(SETTINGS_KEY)); } catch (e) {}
+  try { s = JSON.parse(getCookie(SETTINGS_KEY)); } catch (e) {}
   if (!s) return;
   document.querySelectorAll("#levelChips input").forEach(i =>
     i.checked = i.value.split(",").some(v => (s.levels || []).includes(+v)));
   document.querySelectorAll("#kindChips input").forEach(i => i.checked = s.kinds.includes(i.value));
   document.querySelectorAll("#modeChips input").forEach(i => i.checked = i.value === s.mode);
   document.querySelectorAll("#countChips input").forEach(i => i.checked = +i.value === s.count);
+  if (s.timeout) document.querySelectorAll("#timeoutChips input").forEach(i => i.checked = +i.value * 1000 === s.timeout);
   $("optSpeak").checked = s.speakQ !== false;
   $("optAuto").checked = s.auto !== false;
   $("optSyn").checked = !!s.showSyn;
@@ -373,12 +421,12 @@ function renderStats() {
     right += p.right; wrong += p.wrong;
   }
   const acc = right + wrong ? Math.round(right / (right + wrong) * 100) : 0;
+  // ランクは右上のボックスに英→和・和→英を縦並びで表示（未確定は「--」）
+  $("rankE2J").textContent = fmtRank(displayRank("e2j"));
+  $("rankJ2E").textContent = fmtRank(displayRank("j2e"));
   $("statsBody").innerHTML =
-    `ランク: <b class="rank-val">${fmtRank(currentRank())}</b>` +
-    `<span class="rank-note">（直近${recentLog.length}問の正答率とレベルから算出）</span><br>` +
-    `収録: ${WORDS.length}語 ／ 学習済み: ${learned}語<br>` +
     `復習期限が来ている問題: <b>${dueCount}語</b><br>` +
-    `通算正答率: ${acc}%（⭕${right} ❌${wrong}）`;
+    `通算正答率: ${acc}%（⭕${right} ❌${wrong}） ／ 学習済み: ${learned}語`;
 }
 
 // ===== セッション制御 =====
@@ -456,27 +504,45 @@ async function startSession() {
   persistSettings(settings);
   const queue = buildQueue(settings);
   if (!queue.length) { alert("該当する問題がありません"); return; }
-  beginSession(settings, queue);
+  beginSession(settings, queue, { noRank: false });
 }
 
-// 間違えた問題だけをシャッフルして再挑戦（結果画面から）
+// 過去に間違えた問題（永続の間違いリスト）だけをシャッフルして出題（設定画面のボタンから）。
+// この挑戦ではランクを変えない。出題方向は設定画面で選んだ形式に従う。
+function startWrongQuiz() {
+  const settings = readSettings();
+  if (!settings.kinds.length) { alert("種類を1つ以上選んでください"); return; }
+  persistSettings(settings);
+  const dir = questionDir(settings);
+  const wrongKey = dir === "e2j" ? "wrongE2J" : "wrongJ2E";
+  const words = WORDS.filter(w => progress[w.id] && progress[w.id][wrongKey] > 0);
+  if (!words.length) { alert("間違えた問題がありません（" + (dir === "e2j" ? "英→和" : "和→英") + "）"); return; }
+  ensureAudio();
+  shuffle(words);
+  beginSession(settings, words, { noRank: true });
+}
+
+// 間違えた問題だけをシャッフルして再挑戦（結果画面から）。ランクは変えない
 function startRetrySession() {
   const words = session.wrongList.slice();
   if (!words.length || !session.settings) return;
   ensureAudio();
   shuffle(words);
-  beginSession(session.settings, words);
+  beginSession(session.settings, words, { noRank: true });
 }
 
-function beginSession(settings, words) {
+function beginSession(settings, words, opts) {
+  opts = opts || {};
   session.active = true;
   session.settings = settings;
-  session.queue = words.map(w => ({ word: w, dir: questionDir(settings) }));
+  session.noRank = !!opts.noRank;       // 「間違えた問題」への挑戦ではランクを変えない
+  session.dirMode = questionDir(settings);
+  session.queue = words.map(w => ({ word: w, dir: session.dirMode }));
   session.total = session.queue.length;
   session.index = 0;
   session.right = 0; session.wrong = 0; session.wrongList = []; session.history = [];
   session.noSpeechStreak = 0;
-  session.rankBefore = currentRank(); // 結果画面でランクの変化を見せるため開始時点を控えておく
+  session.rankBefore = displayRank(session.dirMode); // 結果画面でランクの変化を見せるため開始時点を控えておく
   renderHistory();
   showScreen("session");
   requestWakeLock();
@@ -488,6 +554,8 @@ function endSession() {
   stopListening();
   speechSynthesis.cancel();
   if (session.wakeLock) { session.wakeLock.release().catch(() => {}); session.wakeLock = null; }
+  // 通常セッションのみ、終了時点のランクを履歴に確定する（グラフ用）
+  if (!session.noRank && session.dirMode) commitRank(session.dirMode);
   renderResult();
   showScreen("result");
 }
@@ -564,11 +632,14 @@ function exampleHtml(w, dir) {
   return `<span class="spoiler">${sentence}${jaSpan}</span>`;
 }
 
-// 語源分解（部分 + 意味、意味は部分の下に表示）を回答画面用のHTMLにする
+// 語源分解のHTML。英語部分（接頭辞・語根・接尾辞）は出題時点から表示し、
+// その意味だけを spoiler にして回答後に開示する。
+// （英→和では英単語は問題として既に見えているので、語源の英語部分を出しても答えにならない。
+//   和→英では英単語自体が答えなので、呼び出し側で #qEtym ごと spoiler にして丸ごと隠す）
 function etymHtml(w) {
   if (!w.etym || !w.etym.length) return "";
   const glosses = w.etym.map(([p, m]) =>
-    `<span class="etym-part"><b>${escapeHtml(p)}</b><span class="etym-m">${escapeHtml(m)}</span></span>`
+    `<span class="etym-part"><b>${escapeHtml(p)}</b><span class="etym-m spoiler">${escapeHtml(m)}</span></span>`
   ).join("");
   return `<div class="etym-gloss">${glosses}</div>`;
 }
@@ -599,9 +670,10 @@ function showQuestion(item) {
   $("qSynonyms").textContent = synText;
   $("qSynonyms").classList.toggle("spoiler", !!synText);
 
+  // 語源: 英→和では英語部分を出題時から表示（意味だけ回答後）、和→英では丸ごと隠す
   const etym = etymHtml(w);
   $("qEtym").innerHTML = etym;
-  $("qEtym").classList.toggle("spoiler", !!etym);
+  $("qEtym").classList.toggle("spoiler", item.dir === "j2e" && !!etym);
 
   $("heard").textContent = "";
   $("verdict").textContent = "";
@@ -694,9 +766,20 @@ async function askOne(item) {
     if (!session.active) return "quit";
   }
 
-  // 回答の聞き取り。「もう一度どうぞ」の再試行は行わず、その分認識時間を長めに取る
+  // 回答の聞き取り。発話は検知したが文字にできなかった場合は「もう一度」を促して同じ時間待つ
   setPhase(item.dir === "e2j" ? "日本語で答えてください" : "英語で答えてください");
-  const res = await listenInterruptible(answerLang, LISTEN_TIMEOUT_MS);
+  let res, reask = 0, spokeButUnclear = false;
+  while (true) {
+    res = await listenInterruptible(answerLang, s.timeout || DEFAULT_TIMEOUT_MS);
+    if (!session.active) return "quit";
+    if (res.manual || res.texts || res.noSpeech || res.error) break;
+    // res.sound: 発話は検知したが解析できなかった → 上限まで「もう一度」を促して聞き直す
+    spokeButUnclear = true;
+    if (reask >= REASK_LIMIT) break;
+    reask++;
+    setPhase("🔁 もう一度どうぞ");
+    if (s.speakQ) { await speak("もう一度", "ja-JP", 1.1); if (!session.active) return "quit"; }
+  }
   setPhase("");
   if (!session.active) return "quit";
 
@@ -707,15 +790,16 @@ async function askOne(item) {
     return "quit";
   }
 
-  if (res.noSpeech || res.error) {
-    // 回答表示中もマイクを開けておき、何か発話が拾えたら「反応あり」として扱う
-    // （正解表示を見て声に出して練習しているケースを無反応と数えないため）
-    const bgListen = listen(answerLang, WRONG_WAIT_MS + 2000);
+  if (res.noSpeech || res.error || res.sound) {
+    // 発話は検知していた（res.sound / spokeButUnclear）＝ユーザーは居るので無反応カウントしない。
+    // 完全無音の場合のみ、回答表示中にも聞き耳を立てて発話があれば「反応あり」として扱う
+    const spoke = !!res.sound || spokeButUnclear;
+    const bgListen = spoke ? null : listen(answerLang, WRONG_WAIT_MS + 2000);
     const outcome = await finishAnswer(item, false, "（聞き取れませんでした）");
-    stopListening();
-    const bg = await bgListen;
+    if (bgListen) stopListening();
+    const bg = bgListen ? await bgListen : null;
     if (outcome === "quit") return outcome;
-    if (session.sawTouch || (bg.texts && bg.texts.length)) {
+    if (spoke || session.sawTouch || (bg && bg.texts && bg.texts.length)) {
       session.noSpeechStreak = 0; // タッチか発話があればユーザーは居るのでカウントしない
     } else {
       session.noSpeechStreak = (session.noSpeechStreak || 0) + 1;
@@ -753,13 +837,9 @@ async function finishAnswer(item, correct, heardText) {
   if (heardText) $("heard").textContent = "🎤 " + heardText;
 
   const answerText = item.dir === "e2j" ? w.ja[0] : w.en;
-  // 出題時からレンダリング済みの和訳・品詞・発音記号・類義語・語源をここで見えるようにする
-  // （中身は変えず、spoilerクラスを外すだけなのでレイアウトは動かない）
-  $("qExample").querySelectorAll(".spoiler").forEach(el => el.classList.remove("spoiler"));
-  $("qPos").classList.remove("spoiler");
-  $("qIpa").classList.remove("spoiler");
-  $("qSynonyms").classList.remove("spoiler");
-  $("qEtym").classList.remove("spoiler");
+  // 出題時からレンダリング済みの和訳・品詞・発音記号・類義語・語源（および語源の意味）を
+  // ここで一括して見えるようにする（中身は変えずspoilerを外すだけなのでレイアウトは動かない）
+  document.querySelectorAll("#session .q-area .spoiler").forEach(el => el.classList.remove("spoiler"));
 
   if (correct) {
     v.textContent = "⭕ 正解！";
@@ -768,7 +848,7 @@ async function finishAnswer(item, correct, heardText) {
     if (item.dir === "e2j" && w.ja.length > 1) {
       const heardNorm = normJa(heardText || "");
       const others = w.ja.filter(a => !heardNorm.includes(normJa(a)));
-      if (others.length) $("qAltAns").textContent = "他の答え: " + others.join(" ／ ");
+      if (others.length) $("qAltAns").textContent = "ほかの回答: " + others.join(" ／ ");
     }
     playCorrect();
   } else {
@@ -839,19 +919,52 @@ function renderWrongList() {
 }
 
 // ===== 結果画面 =====
+// 出題方向のランク履歴（過去RANK_HIST_MAX回）を折れ線グラフのSVGにする
+function renderRankGraph(dir) {
+  const hist = rankData[dir].hist;
+  if (!hist.length) return `<p class="wl-empty">まだ記録がありません</p>`;
+  const W = 300, H = 120, padL = 26, padR = 10, padT = 12, padB = 20;
+  const n = hist.length;
+  const xw = W - padL - padR, yh = H - padT - padB;
+  const x = i => padL + (n === 1 ? xw / 2 : xw * i / (n - 1));
+  const y = v => padT + yh * (1 - v / 10);
+  const pts = hist.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const dots = hist.map((v, i) =>
+    `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3" class="rg-dot"/>` +
+    `<text x="${x(i).toFixed(1)}" y="${(y(v) - 7).toFixed(1)}" text-anchor="middle" class="rg-val">${fmtRank(v)}</text>`
+  ).join("");
+  const grid = [0, 5, 10].map(g =>
+    `<line x1="${padL}" y1="${y(g).toFixed(1)}" x2="${W - padR}" y2="${y(g).toFixed(1)}" class="rg-grid"/>` +
+    `<text x="${(padL - 5).toFixed(1)}" y="${(y(g) + 3).toFixed(1)}" text-anchor="end" class="rg-axis">${g}</text>`
+  ).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" class="rank-graph-svg">${grid}` +
+    `<polyline points="${pts}" fill="none" class="rg-line"/>${dots}</svg>`;
+}
+
 function renderResult() {
   const answered = session.right + session.wrong;
   const acc = answered ? Math.round(session.right / answered * 100) : 0;
-  // ランクの変化（セッション開始時に控えた値 → 現在値）
-  const before = session.rankBefore != null ? session.rankBefore : currentRank();
-  const after = currentRank();
-  const diff = Math.round((after - before) * 10) / 10;
-  const diffHtml = diff > 0 ? `<span class="rank-up">▲${diff.toFixed(1)}</span>`
-    : diff < 0 ? `<span class="rank-down">▼${Math.abs(diff).toFixed(1)}</span>`
-    : `<span class="rank-flat">±0</span>`;
-  $("resultSummary").innerHTML =
-    `回答数: ${answered}問<br>⭕ ${session.right}問 ／ ❌ ${session.wrong}問<br>正答率: <b>${acc}%</b><br>` +
-    `ランク: ${fmtRank(before)} → <b class="rank-val">${fmtRank(after)}</b>（${diffHtml}）`;
+  let html = `回答数: ${answered}問<br>⭕ ${session.right}問 ／ ❌ ${session.wrong}問<br>正答率: <b>${acc}%</b>`;
+  if (!session.noRank) {
+    // 通常セッション: 出題方向のランクの変化を表示し、履歴グラフも出す
+    const dir = session.dirMode;
+    const label = dir === "e2j" ? "英→和" : "和→英";
+    const before = session.rankBefore, after = displayRank(dir);
+    const diff = (before != null && after != null) ? Math.round((after - before) * 10) / 10 : null;
+    const diffHtml = diff == null ? ""
+      : diff > 0 ? `（<span class="rank-up">▲${diff.toFixed(1)}</span>）`
+      : diff < 0 ? `（<span class="rank-down">▼${Math.abs(diff).toFixed(1)}</span>）`
+      : `（<span class="rank-flat">±0</span>）`;
+    html += `<br>${label}ランク: ${fmtRank(before)} → <b class="rank-val">${fmtRank(after)}</b>${diffHtml}`;
+    $("rankGraphCard").classList.remove("hidden");
+    $("rankGraphTitle").textContent = `${label} ランク推移`;
+    $("rankGraph").innerHTML = renderRankGraph(dir);
+  } else {
+    // 「間違えた問題」への挑戦: ランクは変えず、グラフも出さない
+    html += `<br><span class="rank-note">再挑戦のためランクは変更していません</span>`;
+    $("rankGraphCard").classList.add("hidden");
+  }
+  $("resultSummary").innerHTML = html;
   $("resultWrong").innerHTML = session.wrongList.length
     ? session.wrongList.map(w => `<b>${w.en}</b> — ${w.ja[0]}`).join("<br>")
     : "なし 🎉";
@@ -861,6 +974,11 @@ function renderResult() {
 
 // ===== イベント =====
 $("startBtn").addEventListener("click", startSession);
+$("wrongQuizBtn").addEventListener("click", startWrongQuiz);
+// ランク表示クリックで説明ポップアップ
+$("rankLink").addEventListener("click", e => { e.preventDefault(); $("rankInfoOverlay").classList.remove("hidden"); });
+$("rankInfoClose").addEventListener("click", () => $("rankInfoOverlay").classList.add("hidden"));
+$("rankInfoOverlay").addEventListener("click", e => { if (e.target === $("rankInfoOverlay")) $("rankInfoOverlay").classList.add("hidden"); });
 $("quitBtn").addEventListener("click", () => manualAction("quit") || (session.active && endSession()));
 $("repeatBtn").addEventListener("click", () => manualAction("repeat"));
 $("skipBtn").addEventListener("click", () => manualAction("skip"));

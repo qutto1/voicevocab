@@ -53,17 +53,54 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 
 .opt { display: block; padding: 6px 0; font-size: 15px; }
 .opt input { transform: scale(1.3); margin-right: 8px; }
+/* 類義語・発音記号チェックを横並びに */
+.opt-row { display: flex; gap: 24px; }
+.opt.inline { display: inline-flex; align-items: center; }
 
-/* 出題形式と種類のカードを横に並べる行 */
-.half-row { display: flex; gap: 14px; margin-bottom: 14px; }
-.half-row .card { flex: 1; margin-bottom: 0; }
+#setup { position: relative; }
 
-/* ランク表示 */
+/* スタート行（スタート ＋ 間違えた問題） */
+.start-row { display: flex; gap: 10px; margin-top: 8px; }
+.start-row .big-btn { margin-top: 0; }
+.big-btn.alt { background: #475467; color: var(--text); }
+
+/* 出題形式と種類、問題数と待ち時間などを横に並べる行 */
+.half-row { display: flex; gap: 12px; margin-bottom: 14px; }
+.half-row .card { margin-bottom: 0; min-width: 0; }
+/* 左のカード(出題形式/問題数)を広めにして、右のカードの余白を左に回し折り返しを防ぐ */
+.half-row .card:nth-child(1) { flex: 1.35; }
+.half-row .card:nth-child(2) { flex: 1; }
+.half-row .chips { flex-wrap: nowrap; }
+.half-row .chip span { padding: 9px 12px; font-size: 14px; white-space: nowrap; }
+
+/* ランク表示（右上） */
+.rank-box { position: absolute; top: 14px; right: 12px; z-index: 5; }
+.rank-link { display: flex; flex-direction: column; gap: 2px; text-align: right; text-decoration: none; color: var(--sub); font-size: 12px; }
+.rank-line b { color: var(--accent); font-size: 17px; margin-left: 4px; }
 .rank-val { color: var(--accent); font-size: 1.2em; }
-.rank-note { color: var(--sub); font-size: 12px; margin-left: 4px; }
+.rank-note { color: var(--sub); font-size: 12px; }
 .rank-up { color: var(--ok); font-weight: 700; }
 .rank-down { color: var(--ng); font-weight: 700; }
 .rank-flat { color: var(--sub); }
+
+/* ランク推移グラフ */
+.rank-graph-svg { width: 100%; max-width: 380px; height: auto; display: block; margin: 0 auto; }
+.rg-line { stroke: var(--accent); stroke-width: 2; }
+.rg-dot { fill: var(--accent); }
+.rg-val { fill: var(--text); font-size: 10px; }
+.rg-grid { stroke: #344054; stroke-width: 1; }
+.rg-axis { fill: var(--sub); font-size: 9px; }
+
+/* 汎用モーダル（ランク説明ポップアップ等） */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: rgba(16, 24, 40, 0.7);
+}
+.modal { background: var(--card); border-radius: 16px; padding: 20px; max-width: 380px; }
+.modal h3 { font-size: 18px; margin-bottom: 10px; }
+.modal p { color: var(--sub); font-size: 14px; line-height: 1.8; margin-bottom: 16px; }
+.modal .sub-btn { margin-top: 0; }
 
 .big-btn {
   display: block; width: 100%;
@@ -122,8 +159,8 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 .verdict { font-size: 30px; font-weight: 800; margin-top: 10px; min-height: 44px; line-height: 44px; }
 .verdict.ok { color: var(--ok); }
 .verdict.ng { color: var(--ng); }
-/* 正解時に併記する「他の答え」行。高さを常に確保しておき、後からテキストを入れてもレイアウトが動かないようにする */
-.q-alt { min-height: 22px; line-height: 22px; font-size: 15px; color: var(--ok); }
+/* 正解時に併記する「ほかの回答」行。高さを常に確保しておき、後からテキストを入れてもレイアウトが動かないようにする */
+.q-alt { min-height: 28px; line-height: 28px; font-size: 20px; font-weight: 600; color: var(--ok); }
 .q-example {
   margin-top: 14px; min-height: 56px;
   font-size: 22px; font-weight: 600; line-height: 1.6; color: var(--text);
@@ -260,7 +297,7 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
   .q-text { font-size: 72px; }
   .q-pos { font-size: 19px; }
   .q-ipa { font-size: 26px; }
-  .q-alt { font-size: 18px; min-height: 26px; line-height: 26px; }
+  .q-alt { font-size: 24px; min-height: 32px; line-height: 32px; }
   .verdict { font-size: 38px; }
   .q-example { font-size: 28px; }
   .q-example .ex-ja { font-size: 18px; }

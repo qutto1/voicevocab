@@ -13,20 +13,29 @@
 
 <!-- ===== 設定画面 ===== -->
 <div id="setup" class="screen setup-grid">
+  <div id="rankBox" class="rank-box">
+    <a href="#" id="rankLink" class="rank-link" title="ランクの説明を見る">
+      <span class="rank-line">英和 <b id="rankE2J">--</b></span>
+      <span class="rank-line">和英 <b id="rankJ2E">--</b></span>
+    </a>
+  </div>
   <h1 class="span2">🎧 VoiceVocab</h1>
   <p class="sub span2">声で答える英単語・熟語トレーニング <span id="appVersion" class="version"></span></p>
 
-  <button id="startBtn" class="big-btn span2">▶ スタート</button>
+  <div class="start-row span2">
+    <button id="startBtn" class="big-btn">▶ スタート</button>
+    <button id="wrongQuizBtn" class="big-btn alt">❌ 間違えた問題</button>
+  </div>
 
   <div class="card">
-    <h2>レベル（複数選択可）</h2>
+    <h2>レベル</h2>
     <div class="chips" id="levelChips">
-      <label class="chip"><input type="checkbox" value="1,2"><span>Lv1・2</span></label>
-      <label class="chip"><input type="checkbox" value="3" checked><span>Lv3</span></label>
-      <label class="chip"><input type="checkbox" value="4"><span>Lv4</span></label>
-      <label class="chip"><input type="checkbox" value="5"><span>Lv5</span></label>
+      <label class="chip"><input type="checkbox" value="1,2"><span>Lv1</span></label>
+      <label class="chip"><input type="checkbox" value="3" checked><span>Lv2</span></label>
+      <label class="chip"><input type="checkbox" value="4"><span>Lv3</span></label>
+      <label class="chip"><input type="checkbox" value="5"><span>Lv4</span></label>
     </div>
-    <p class="hint">Lv1・2 中学 ／ Lv3 高校 ／ Lv4 大学受験 ／ Lv5 上級</p>
+    <p class="hint">Lv1 中学 ／ Lv2 高校 ／ Lv3 大学受験 ／ Lv4 上級</p>
   </div>
 
   <div class="half-row">
@@ -57,11 +66,23 @@
   </div>
 
   <div class="card">
+    <h2>回答の待ち時間</h2>
+    <div class="chips radio" id="timeoutChips">
+      <label class="chip"><input type="radio" name="timeout" value="4"><span>4秒</span></label>
+      <label class="chip"><input type="radio" name="timeout" value="6" checked><span>6秒</span></label>
+      <label class="chip"><input type="radio" name="timeout" value="8"><span>8秒</span></label>
+      <label class="chip"><input type="radio" name="timeout" value="10"><span>10秒</span></label>
+    </div>
+  </div>
+
+  <div class="card">
     <h2>オプション</h2>
     <label class="opt"><input type="checkbox" id="optSpeak" checked> 問題を読み上げる（ハンズフリー用）</label>
     <label class="opt"><input type="checkbox" id="optAuto" checked> 自動で次の問題へ進む</label>
-    <label class="opt"><input type="checkbox" id="optSyn" checked> 類義語を表示する</label>
-    <label class="opt"><input type="checkbox" id="optIpa"> 発音記号を表示する</label>
+    <div class="opt-row">
+      <label class="opt inline"><input type="checkbox" id="optSyn" checked> 類義語</label>
+      <label class="opt inline"><input type="checkbox" id="optIpa"> 発音記号</label>
+    </div>
   </div>
 
   <div class="card stats" id="statsCard">
@@ -71,6 +92,17 @@
 
   <button id="wrongListBtn" class="sub-btn span2">❌ 間違えた問題リスト</button>
   <p class="note span2" id="supportNote"></p>
+</div>
+
+<!-- ランク説明ポップアップ -->
+<div id="rankInfoOverlay" class="modal-overlay hidden">
+  <div class="modal">
+    <h3>ランクについて</h3>
+    <p>直近50問の正答率と平均レベルから算出します（0.1〜9.9、最高レベルを全問正解すると10）。
+    英→和・和→英はそれぞれ独立に記録され、セッションを終えるたびに更新されます。
+    「間違えた問題」への挑戦ではランクは変わりません。</p>
+    <button id="rankInfoClose" class="sub-btn">閉じる</button>
+  </div>
 </div>
 
 <!-- ===== 学習画面 ===== -->
@@ -132,6 +164,7 @@
 <div id="result" class="screen hidden">
   <h1>結果</h1>
   <div class="card" id="resultSummary"></div>
+  <div class="card hidden" id="rankGraphCard"><h2 id="rankGraphTitle">ランク推移</h2><div id="rankGraph"></div></div>
   <div class="card"><h2>間違えた問題</h2><div id="resultWrong"></div></div>
   <button id="retryWrongBtn" class="big-btn retry hidden">🔁 間違えた問題だけ再挑戦</button>
   <button id="backBtn" class="big-btn">設定に戻る</button>
