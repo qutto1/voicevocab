@@ -21,29 +21,28 @@
   <div class="card">
     <h2>レベル（複数選択可）</h2>
     <div class="chips" id="levelChips">
-      <label class="chip"><input type="checkbox" value="1"><span>Lv1</span></label>
-      <label class="chip"><input type="checkbox" value="2"><span>Lv2</span></label>
+      <label class="chip"><input type="checkbox" value="1,2"><span>Lv1・2</span></label>
       <label class="chip"><input type="checkbox" value="3" checked><span>Lv3</span></label>
       <label class="chip"><input type="checkbox" value="4"><span>Lv4</span></label>
       <label class="chip"><input type="checkbox" value="5"><span>Lv5</span></label>
     </div>
-    <p class="hint">Lv1 中学基礎 ／ Lv2 中学発展 ／ Lv3 高校 ／ Lv4 大学受験 ／ Lv5 上級</p>
+    <p class="hint">Lv1・2 中学 ／ Lv3 高校 ／ Lv4 大学受験 ／ Lv5 上級</p>
   </div>
 
-  <div class="card">
-    <h2>種類</h2>
-    <div class="chips" id="kindChips">
-      <label class="chip"><input type="checkbox" value="w" checked><span>単語</span></label>
-      <label class="chip"><input type="checkbox" value="i" checked><span>熟語</span></label>
+  <div class="half-row">
+    <div class="card">
+      <h2>出題形式</h2>
+      <div class="chips radio" id="modeChips">
+        <label class="chip"><input type="radio" name="mode" value="e2j" checked><span>英→和</span></label>
+        <label class="chip"><input type="radio" name="mode" value="j2e"><span>和→英</span></label>
+      </div>
     </div>
-  </div>
-
-  <div class="card">
-    <h2>出題形式</h2>
-    <div class="chips radio" id="modeChips">
-      <label class="chip"><input type="radio" name="mode" value="e2j" checked><span>英→和</span></label>
-      <label class="chip"><input type="radio" name="mode" value="j2e"><span>和→英</span></label>
-      <label class="chip"><input type="radio" name="mode" value="mix"><span>ミックス</span></label>
+    <div class="card">
+      <h2>種類</h2>
+      <div class="chips" id="kindChips">
+        <label class="chip"><input type="checkbox" value="w" checked><span>単語</span></label>
+        <label class="chip"><input type="checkbox" value="i" checked><span>熟語</span></label>
+      </div>
     </div>
   </div>
 
@@ -62,6 +61,7 @@
     <label class="opt"><input type="checkbox" id="optSpeak" checked> 問題を読み上げる（ハンズフリー用）</label>
     <label class="opt"><input type="checkbox" id="optAuto" checked> 自動で次の問題へ進む</label>
     <label class="opt"><input type="checkbox" id="optSyn" checked> 類義語を表示する</label>
+    <label class="opt"><input type="checkbox" id="optIpa"> 発音記号を表示する</label>
   </div>
 
   <div class="card stats" id="statsCard">
@@ -82,12 +82,13 @@
   </div>
 
   <div class="q-area">
-    <div id="qText" class="q-text">apple</div>
-    <div id="qIpa" class="q-ipa"><span id="qPos" class="q-pos"></span><span id="qIpaText"></span></div>
+    <div id="qText" class="q-text"><span id="qPos" class="q-pos"></span><span id="qTextWord">apple</span></div>
+    <div id="qIpa" class="q-ipa"><span id="qIpaText"></span></div>
+    <div id="qEtym" class="q-etym"></div>
     <div id="phase" class="phase">…</div>
     <div id="heard" class="heard"></div>
     <div id="verdict" class="verdict"></div>
-    <div id="qEtym" class="q-etym"></div>
+    <div id="qAltAns" class="q-alt"></div>
     <div id="qExample" class="q-example"></div>
     <div id="qSynonyms" class="q-syn"></div>
   </div>
@@ -108,7 +109,7 @@
   <div id="historyBar" class="history-bar"></div>
   <div id="pauseOverlay" class="pause-overlay hidden">
     <p class="pause-msg">🔇 音声が認識できないので<br>一時中断しました。<br>タッチすると続けます。</p>
-    <button id="pauseQuitBtn" type="button" class="pause-quit">終了する</button>
+    <button id="pauseResumeBtn" type="button" class="pause-quit">続行する</button>
   </div>
 </div>
 
@@ -119,6 +120,10 @@
     <button id="sortCountBtn" type="button" class="sort-chip active">間違えた回数順</button>
     <button id="sortRecentBtn" type="button" class="sort-chip">最近順</button>
   </div>
+  <div class="wl-sort-toggle">
+    <button id="wlSynBtn" type="button" class="sort-chip active">類義語</button>
+    <button id="wlExBtn" type="button" class="sort-chip">例文</button>
+  </div>
   <div class="card"><div id="wrongListBody">-</div></div>
   <button id="wrongBackBtn" class="big-btn">設定に戻る</button>
 </div>
@@ -128,6 +133,7 @@
   <h1>結果</h1>
   <div class="card" id="resultSummary"></div>
   <div class="card"><h2>間違えた問題</h2><div id="resultWrong"></div></div>
+  <button id="retryWrongBtn" class="big-btn retry hidden">🔁 間違えた問題だけ再挑戦</button>
   <button id="backBtn" class="big-btn">設定に戻る</button>
 </div>
 

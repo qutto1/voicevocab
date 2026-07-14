@@ -3,7 +3,7 @@
 
 "use strict";
 
-const APP_VERSION = "v12";
+const APP_VERSION = "v13";
 
 // ===== 間隔反復（忘却曲線） =====
 // stage n で正解 → 次回出題は INTERVALS_DAYS[n] 日後。不正解 → stage 0 に戻し10分後に再出題対象。
@@ -11,12 +11,14 @@ const INTERVALS_DAYS = [0, 1, 3, 7, 14, 30, 60, 120];
 const RELEARN_MS = 10 * 60 * 1000;      // 不正解後の再出題間隔
 const REQUEUE_GAP = 4;                   // セッション内で間違えた問題を何問後に再出題するか
 const LISTEN_TIMEOUT_MS = 11000;         // 音声認識の待機時間（再試行を廃止した分、長めに確保）
-const NO_SPEECH_STREAK_LIMIT = 3;        // 何回連続で無音だったら一時中断するか
+const NO_SPEECH_STREAK_LIMIT = 5;        // 何回連続で無反応だったら一時中断するか（タッチや発話があればカウントしない）
 const WRONG_WAIT_MS = 5000;              // 不正解後、次の問題までの待機時間
 const CORRECT_WAIT_MS = 700;             // 正解後、次の問題までの待機時間（通常）
 const CORRECT_WAIT_SYN_MS = 2000;        // 正解後の待機時間（類義語表示オプションON時）
 const PROG_KEY = "vv_progress_v1";
-const SETTINGS_KEY = "vv_settings_v3";   // レベルが複数選択トグルに戻ったためv3
+const SETTINGS_KEY = "vv_settings_v4";   // ミックス廃止・Lv1/2統合・発音記号オプション追加のためv4
+const RECENT_KEY = "vv_recent_v1";       // ランク算出用の直近回答ログ
+const RECENT_MAX = 50;                   // ランクは直近この問数の正答率とレベルから算出
 
 let progress = {};   // { id: {stage, due, right, wrong} }
 try { progress = JSON.parse(localStorage.getItem(PROG_KEY)) || {}; } catch (e) { progress = {}; }
@@ -35,7 +37,26 @@ function getProg(id) {
   return progress[id];
 }
 
+// ===== ランク（直近RECENT_MAX問の正答率とレベルから算出） =====
+// ランク = 平均レベル × 正答率 × 2（0.1〜9.9、Lv5を全問正解したときだけ10）
+let recentLog = [];  // [{lv, ok}] 直近の回答（古い順）
+try { recentLog = JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch (e) { recentLog = []; }
+function pushRecent(lv, ok) {
+  recentLog.push({ lv, ok: ok ? 1 : 0 });
+  if (recentLog.length > RECENT_MAX) recentLog = recentLog.slice(-RECENT_MAX);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(recentLog));
+}
+function currentRank() {
+  if (!recentLog.length) return 0.1;
+  let lvSum = 0, okSum = 0;
+  for (const r of recentLog) { lvSum += r.lv; okSum += r.ok; }
+  const rank = (lvSum / recentLog.length) * (okSum / recentLog.length) * 2;
+  return Math.max(0.1, Math.min(10, Math.round(rank * 10) / 10));
+}
+function fmtRank(r) { return r >= 10 ? "10" : r.toFixed(1); }
+
 function recordAnswer(word, correct, dir) {
+  pushRecent(word.lv, correct);
   const p = getProg(word.id);
   const now = Date.now();
   if (correct) {
@@ -200,11 +221,25 @@ function beep(freq, startOffset, dur, type, vol) {
   osc.start(t);
   osc.stop(t + dur + 0.05);
 }
-function playCorrect() { // ピンポン♪（上昇2音）
+// 余韻を残して減衰するチャイム音（ピンポーン用）
+function chime(freq, startOffset, dur, vol) {
+  const t = audioCtx.currentTime + startOffset;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = "sine";
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(vol, t + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t);
+  osc.stop(t + dur + 0.05);
+}
+function playCorrect() { // ピンポーン♪（高→低の2音チャイム、2音目は余韻を長く）
   ensureAudio();
   if (!audioCtx) return;
-  beep(784, 0, 0.12, "sine", 0.3);
-  beep(1175, 0.13, 0.25, "sine", 0.3);
+  chime(1319, 0, 0.5, 0.3);     // ピン (E6)
+  chime(1047, 0.28, 0.9, 0.3);  // ポーン (C6)
 }
 function playWrong() { // ブザー（低い2連音）
   ensureAudio();
@@ -236,41 +271,57 @@ const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let activeRec = null;
 
 // 1回分の聞き取り。resolve: {texts:[...]} / {noSpeech:true} / {error:msg}
+// 周囲のノイズが多いと、認識エンジンがタイムアウト前に勝手に打ち切って no-speech を
+// 返してくることがある（「聞き取れない」誤判定の原因）。そこで認識が途中で終わっても
+// こちらのタイムアウトが来るまでは認識を張り直し、待機時間いっぱい聞き続ける。
 function listen(lang, timeoutMs) {
   return new Promise(resolve => {
     if (!SR) return resolve({ error: "unsupported" });
-    const rec = new SR();
-    activeRec = rec;
-    rec.lang = lang;
-    rec.interimResults = false;
-    rec.maxAlternatives = 5;
+    const deadline = Date.now() + (timeoutMs || 8000);
     let settled = false;
-    const settle = v => {
+    let rec = null;
+    // stopListening から外部中断できるよう、コントローラを activeRec に置く
+    const ctl = { abort() { finish({ noSpeech: true }); } };
+    activeRec = ctl;
+    const timer = setTimeout(() => finish({ noSpeech: true }), timeoutMs || 8000);
+    const finish = v => {
       if (settled) return;
       settled = true;
-      activeRec = null;
+      if (activeRec === ctl) activeRec = null;
       clearTimeout(timer);
-      try { rec.abort(); } catch (e) {}
+      if (rec) { try { rec.abort(); } catch (e) {} }
       resolve(v);
     };
-    const timer = setTimeout(() => settle({ noSpeech: true }), timeoutMs || 8000);
-    rec.onresult = ev => {
-      const texts = [];
-      const res = ev.results[ev.results.length - 1];
-      for (let i = 0; i < res.length; i++) texts.push(res[i].transcript);
-      settle({ texts });
+    const restart = () => {
+      if (settled) return;
+      // 残り時間がわずかなら張り直さずに無音として終える
+      if (Date.now() >= deadline - 500) return finish({ noSpeech: true });
+      startRec();
     };
-    rec.onerror = ev => {
-      if (ev.error === "no-speech" || ev.error === "aborted") settle({ noSpeech: true });
-      else settle({ error: ev.error });
+    const startRec = () => {
+      rec = new SR();
+      rec.lang = lang;
+      rec.interimResults = false;
+      rec.maxAlternatives = 5;
+      rec.onresult = ev => {
+        const texts = [];
+        const res = ev.results[ev.results.length - 1];
+        for (let i = 0; i < res.length; i++) texts.push(res[i].transcript);
+        finish({ texts });
+      };
+      rec.onerror = ev => {
+        if (ev.error === "no-speech" || ev.error === "aborted") restart();
+        else finish({ error: ev.error });
+      };
+      rec.onend = () => restart();
+      try { rec.start(); } catch (e) { finish({ error: String(e) }); }
     };
-    rec.onend = () => settle({ noSpeech: true });
-    try { rec.start(); } catch (e) { settle({ error: String(e) }); }
+    startRec();
   });
 }
 
 function stopListening() {
-  if (activeRec) { try { activeRec.abort(); } catch (e) {} activeRec = null; }
+  if (activeRec) { const a = activeRec; activeRec = null; try { a.abort(); } catch (e) {} }
 }
 
 // ===== 画面要素 =====
@@ -282,24 +333,32 @@ function showScreen(name) {
 
 // ===== 設定の保存・復元 =====
 function readSettings() {
-  const levels = [...document.querySelectorAll("#levelChips input:checked")].map(i => +i.value);
+  // Lv1・2統合チップは value="1,2" のようにカンマ区切りで複数レベルを持つ
+  const levels = [...document.querySelectorAll("#levelChips input:checked")]
+    .flatMap(i => i.value.split(",").map(Number));
   const kinds = [...document.querySelectorAll("#kindChips input:checked")].map(i => i.value);
   const mode = document.querySelector("#modeChips input:checked").value;
   const count = +document.querySelector("#countChips input:checked").value;
-  return { levels, kinds, mode, count, speakQ: $("optSpeak").checked, auto: $("optAuto").checked, showSyn: $("optSyn").checked };
+  return {
+    levels, kinds, mode, count,
+    speakQ: $("optSpeak").checked, auto: $("optAuto").checked,
+    showSyn: $("optSyn").checked, showIpa: $("optIpa").checked,
+  };
 }
 function persistSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
 function restoreSettings() {
   let s;
   try { s = JSON.parse(localStorage.getItem(SETTINGS_KEY)); } catch (e) {}
   if (!s) return;
-  document.querySelectorAll("#levelChips input").forEach(i => i.checked = (s.levels || []).includes(+i.value));
+  document.querySelectorAll("#levelChips input").forEach(i =>
+    i.checked = i.value.split(",").some(v => (s.levels || []).includes(+v)));
   document.querySelectorAll("#kindChips input").forEach(i => i.checked = s.kinds.includes(i.value));
   document.querySelectorAll("#modeChips input").forEach(i => i.checked = i.value === s.mode);
   document.querySelectorAll("#countChips input").forEach(i => i.checked = +i.value === s.count);
   $("optSpeak").checked = s.speakQ !== false;
   $("optAuto").checked = s.auto !== false;
   $("optSyn").checked = !!s.showSyn;
+  $("optIpa").checked = !!s.showIpa;
 }
 
 // ===== 学習状況表示 =====
@@ -315,6 +374,8 @@ function renderStats() {
   }
   const acc = right + wrong ? Math.round(right / (right + wrong) * 100) : 0;
   $("statsBody").innerHTML =
+    `ランク: <b class="rank-val">${fmtRank(currentRank())}</b>` +
+    `<span class="rank-note">（直近${recentLog.length}問の正答率とレベルから算出）</span><br>` +
     `収録: ${WORDS.length}語 ／ 学習済み: ${learned}語<br>` +
     `復習期限が来ている問題: <b>${dueCount}語</b><br>` +
     `通算正答率: ${acc}%（⭕${right} ❌${wrong}）`;
@@ -329,7 +390,10 @@ const session = {
 
 // ===== 画面を指で押し続けている間は自動で次の問題に進めない =====
 let isTouching = false;
-document.addEventListener("pointerdown", () => { isTouching = true; });
+document.addEventListener("pointerdown", () => {
+  isTouching = true;
+  session.sawTouch = true; // 無反応カウントの解除用（タッチがあれば「反応あり」とみなす）
+});
 document.addEventListener("pointerup", () => { isTouching = false; });
 document.addEventListener("pointercancel", () => { isTouching = false; });
 
@@ -346,20 +410,17 @@ function waitAutoAdvance(ms) {
 }
 
 // 音声が連続で認識できなかったときに全画面表示する一時中断オーバーレイ。
-// タッチで再開、「終了する」でセッションを終える（{quit:true}を返す）
+// 画面のどこか（「続行する」ボタン含む）をタッチすると再開する
 function waitForTapToResume() {
   return new Promise(resolve => {
     const overlay = $("pauseOverlay");
     overlay.classList.remove("hidden");
-    const cleanup = () => {
+    const onTap = () => {
       overlay.classList.add("hidden");
       overlay.removeEventListener("pointerdown", onTap);
-      $("pauseQuitBtn").removeEventListener("click", onQuit);
+      resolve({ quit: false });
     };
-    const onTap = () => { cleanup(); resolve({ quit: false }); };
-    const onQuit = e => { e.stopPropagation(); cleanup(); resolve({ quit: true }); };
     overlay.addEventListener("pointerdown", onTap);
-    $("pauseQuitBtn").addEventListener("click", onQuit);
   });
 }
 
@@ -381,8 +442,7 @@ function renderHistory() {
 }
 
 function questionDir(settings) {
-  if (settings.mode === "mix") return Math.random() < 0.5 ? "e2j" : "j2e";
-  return settings.mode;
+  return settings.mode === "j2e" ? "j2e" : "e2j";
 }
 
 async function requestWakeLock() {
@@ -396,13 +456,27 @@ async function startSession() {
   persistSettings(settings);
   const queue = buildQueue(settings);
   if (!queue.length) { alert("該当する問題がありません"); return; }
+  beginSession(settings, queue);
+}
 
+// 間違えた問題だけをシャッフルして再挑戦（結果画面から）
+function startRetrySession() {
+  const words = session.wrongList.slice();
+  if (!words.length || !session.settings) return;
+  ensureAudio();
+  shuffle(words);
+  beginSession(session.settings, words);
+}
+
+function beginSession(settings, words) {
   session.active = true;
   session.settings = settings;
-  session.queue = queue.map(w => ({ word: w, dir: questionDir(settings) }));
+  session.queue = words.map(w => ({ word: w, dir: questionDir(settings) }));
   session.total = session.queue.length;
   session.index = 0;
-  session.right = 0; session.wrong = 0; session.wrongList = []; session.history = []; session.noSpeechStreak = 0;
+  session.right = 0; session.wrong = 0; session.wrongList = []; session.history = [];
+  session.noSpeechStreak = 0;
+  session.rankBefore = currentRank(); // 結果画面でランクの変化を見せるため開始時点を控えておく
   renderHistory();
   showScreen("session");
   requestWakeLock();
@@ -501,7 +575,7 @@ function etymHtml(w) {
 
 function showQuestion(item) {
   const w = item.word;
-  $("qText").textContent = item.dir === "e2j" ? w.en : w.ja[0];
+  const s = session.settings;
 
   // 回答画面でしか見せない情報（和訳・類義語・語源、和→英の場合は品詞・発音記号・例文も）は
   // 最初から最終的な内容までレンダリングしておき、spoilerクラス(visibility:hidden)で隠す。
@@ -509,10 +583,17 @@ function showQuestion(item) {
   // 「表示するかどうか」だけを切り替えて位置がずれないようにしている。
   $("qExample").innerHTML = exampleHtml(w, item.dir);
 
-  const ipa = w.ipa || "";
+  // 品詞は問題の単語・熟語の直前にバッジ表示（和→英では答えのヒントになるため回答後に表示）
   $("qPos").textContent = w.pos || "";
+  $("qPos").classList.toggle("hidden", !w.pos);
+  $("qPos").classList.toggle("spoiler", item.dir === "j2e" && !!w.pos);
+  $("qTextWord").textContent = item.dir === "e2j" ? w.en : w.ja[0];
+
+  // 発音記号は設定でONのときだけ行ごと表示（和→英では回答後に表示）
+  const ipa = w.ipa || "";
   $("qIpaText").textContent = ipa;
-  $("qIpa").classList.toggle("spoiler", item.dir === "j2e" && !!(w.pos || ipa));
+  $("qIpa").classList.toggle("hidden", !s.showIpa);
+  $("qIpa").classList.toggle("spoiler", item.dir === "j2e" && !!ipa);
 
   const synText = session.settings.showSyn && w.syn && w.syn.length ? "類義語: " + w.syn.join(", ") : "";
   $("qSynonyms").textContent = synText;
@@ -525,6 +606,7 @@ function showQuestion(item) {
   $("heard").textContent = "";
   $("verdict").textContent = "";
   $("verdict").className = "verdict";
+  $("qAltAns").textContent = ""; // 正解時の「他の答え」行（高さはCSSで確保済みなので後から入れてもずれない）
   $("progressLabel").textContent = `${Math.min(session.index + 1, session.total)} / ${session.total}`;
   $("scoreLabel").textContent = `⭕${session.right} ❌${session.wrong}`;
   $("nextRow").style.visibility = "hidden";
@@ -602,6 +684,7 @@ async function askOne(item) {
   const w = item.word;
   const s = session.settings;
   const answerLang = item.dir === "e2j" ? "ja-JP" : "en-US";
+  session.sawTouch = false; // この問題の間にタッチがあったか（無反応カウントの解除条件）
   showQuestion(item);
 
   // 出題読み上げ（案内文は showQuestion で既に表示済み）
@@ -625,12 +708,22 @@ async function askOne(item) {
   }
 
   if (res.noSpeech || res.error) {
+    // 回答表示中もマイクを開けておき、何か発話が拾えたら「反応あり」として扱う
+    // （正解表示を見て声に出して練習しているケースを無反応と数えないため）
+    const bgListen = listen(answerLang, WRONG_WAIT_MS + 2000);
     const outcome = await finishAnswer(item, false, "（聞き取れませんでした）");
-    session.noSpeechStreak = (session.noSpeechStreak || 0) + 1;
-    if (session.noSpeechStreak >= NO_SPEECH_STREAK_LIMIT) {
-      session.noSpeechStreak = 0;
-      const r = await waitForTapToResume();
-      if (r.quit) return "quit";
+    stopListening();
+    const bg = await bgListen;
+    if (outcome === "quit") return outcome;
+    if (session.sawTouch || (bg.texts && bg.texts.length)) {
+      session.noSpeechStreak = 0; // タッチか発話があればユーザーは居るのでカウントしない
+    } else {
+      session.noSpeechStreak = (session.noSpeechStreak || 0) + 1;
+      if (session.noSpeechStreak >= NO_SPEECH_STREAK_LIMIT) {
+        session.noSpeechStreak = 0;
+        const r = await waitForTapToResume();
+        if (r.quit) return "quit";
+      }
     }
     return outcome;
   }
@@ -660,9 +753,10 @@ async function finishAnswer(item, correct, heardText) {
   if (heardText) $("heard").textContent = "🎤 " + heardText;
 
   const answerText = item.dir === "e2j" ? w.ja[0] : w.en;
-  // 出題時からレンダリング済みの和訳・発音記号・類義語・語源をここで見えるようにする
+  // 出題時からレンダリング済みの和訳・品詞・発音記号・類義語・語源をここで見えるようにする
   // （中身は変えず、spoilerクラスを外すだけなのでレイアウトは動かない）
   $("qExample").querySelectorAll(".spoiler").forEach(el => el.classList.remove("spoiler"));
+  $("qPos").classList.remove("spoiler");
   $("qIpa").classList.remove("spoiler");
   $("qSynonyms").classList.remove("spoiler");
   $("qEtym").classList.remove("spoiler");
@@ -670,6 +764,12 @@ async function finishAnswer(item, correct, heardText) {
   if (correct) {
     v.textContent = "⭕ 正解！";
     v.className = "verdict ok";
+    // 認識された語以外にも正解として登録されている訳語があれば併記する（英→和のみ）
+    if (item.dir === "e2j" && w.ja.length > 1) {
+      const heardNorm = normJa(heardText || "");
+      const others = w.ja.filter(a => !heardNorm.includes(normJa(a)));
+      if (others.length) $("qAltAns").textContent = "他の答え: " + others.join(" ／ ");
+    }
     playCorrect();
   } else {
     v.textContent = `❌ 正解: ${answerText}`;
@@ -703,6 +803,8 @@ function escapeHtml(s) {
 // ===== 間違えた問題リスト（英→和・和→英を分けて表示） =====
 // "count" = 間違えた回数順（多い順） / "recent" = 最近間違えた順
 let wrongSortMode = "count";
+let wrongShowSyn = true;   // 類義語を併記するか
+let wrongShowEx = false;   // 例文を併記するか
 
 // dir別に一覧HTMLを作る。各行は「回数(❌⭕) — 問題 → 解答」の順（数字を先に見せる）
 function wrongListSection(dir, title) {
@@ -720,8 +822,9 @@ function wrongListSection(dir, title) {
         const q = dir === "e2j" ? w.en : w.ja[0];
         const a = dir === "e2j" ? w.ja[0] : w.en;
         const ipa = dir === "e2j" && w.ipa ? ` <span class="wl-ipa">${escapeHtml(w.ipa)}</span>` : "";
-        const synLine = w.syn && w.syn.length ? `<div class="wl-syn">類義語: ${escapeHtml(w.syn.join(", "))}</div>` : "";
-        return `<div class="wl-item"><div><span class="wl-count">❌${p[wrongKey]} ⭕${p[rightKey] || 0}</span> <b>${escapeHtml(q)}</b>${ipa} — ${escapeHtml(a)}</div>${synLine}</div>`;
+        const synLine = wrongShowSyn && w.syn && w.syn.length ? `<div class="wl-syn">類義語: ${escapeHtml(w.syn.join(", "))}</div>` : "";
+        const exLine = wrongShowEx && w.ex ? `<div class="wl-ex">${escapeHtml(w.ex)}<span class="wl-exja">${escapeHtml(w.exJa || "")}</span></div>` : "";
+        return `<div class="wl-item"><div><span class="wl-count">❌${p[wrongKey]} ⭕${p[rightKey] || 0}</span> <b>${escapeHtml(q)}</b>${ipa} — ${escapeHtml(a)}</div>${synLine}${exLine}</div>`;
       }).join("")}</div>`
     : `<p class="wl-empty">なし 🎉</p>`;
   return `<div class="wl-section"><h3>${title}</h3>${body}</div>`;
@@ -729,6 +832,8 @@ function wrongListSection(dir, title) {
 function renderWrongList() {
   $("sortCountBtn").classList.toggle("active", wrongSortMode === "count");
   $("sortRecentBtn").classList.toggle("active", wrongSortMode === "recent");
+  $("wlSynBtn").classList.toggle("active", wrongShowSyn);
+  $("wlExBtn").classList.toggle("active", wrongShowEx);
   $("wrongListBody").innerHTML =
     wrongListSection("e2j", "英→和") + wrongListSection("j2e", "和→英");
 }
@@ -737,11 +842,21 @@ function renderWrongList() {
 function renderResult() {
   const answered = session.right + session.wrong;
   const acc = answered ? Math.round(session.right / answered * 100) : 0;
+  // ランクの変化（セッション開始時に控えた値 → 現在値）
+  const before = session.rankBefore != null ? session.rankBefore : currentRank();
+  const after = currentRank();
+  const diff = Math.round((after - before) * 10) / 10;
+  const diffHtml = diff > 0 ? `<span class="rank-up">▲${diff.toFixed(1)}</span>`
+    : diff < 0 ? `<span class="rank-down">▼${Math.abs(diff).toFixed(1)}</span>`
+    : `<span class="rank-flat">±0</span>`;
   $("resultSummary").innerHTML =
-    `回答数: ${answered}問<br>⭕ ${session.right}問 ／ ❌ ${session.wrong}問<br>正答率: <b>${acc}%</b>`;
+    `回答数: ${answered}問<br>⭕ ${session.right}問 ／ ❌ ${session.wrong}問<br>正答率: <b>${acc}%</b><br>` +
+    `ランク: ${fmtRank(before)} → <b class="rank-val">${fmtRank(after)}</b>（${diffHtml}）`;
   $("resultWrong").innerHTML = session.wrongList.length
     ? session.wrongList.map(w => `<b>${w.en}</b> — ${w.ja[0]}`).join("<br>")
     : "なし 🎉";
+  // 間違いがあるときだけ「間違えた問題だけ再挑戦」を出す
+  $("retryWrongBtn").classList.toggle("hidden", !session.wrongList.length);
 }
 
 // ===== イベント =====
@@ -756,10 +871,13 @@ $("pauseBtn").addEventListener("pointerdown", e => e.preventDefault());
 $("pauseBtn").addEventListener("contextmenu", e => e.preventDefault());
 $("nextBtn").addEventListener("click", () => manualAction("next"));
 $("backBtn").addEventListener("click", () => { renderStats(); showScreen("setup"); });
+$("retryWrongBtn").addEventListener("click", startRetrySession);
 $("wrongListBtn").addEventListener("click", () => { renderWrongList(); showScreen("wrong"); });
 $("wrongBackBtn").addEventListener("click", () => { renderStats(); showScreen("setup"); });
 $("sortCountBtn").addEventListener("click", () => { wrongSortMode = "count"; renderWrongList(); });
 $("sortRecentBtn").addEventListener("click", () => { wrongSortMode = "recent"; renderWrongList(); });
+$("wlSynBtn").addEventListener("click", () => { wrongShowSyn = !wrongShowSyn; renderWrongList(); });
+$("wlExBtn").addEventListener("click", () => { wrongShowEx = !wrongShowEx; renderWrongList(); });
 
 // 画面復帰時にウェイクロックを取り直す
 document.addEventListener("visibilitychange", () => {
