@@ -3,7 +3,7 @@
 
 "use strict";
 
-const APP_VERSION = "v17";
+const APP_VERSION = "v18";
 
 // ===== 間隔反復（忘却曲線） =====
 // stage n で正解 → 次回出題は INTERVALS_DAYS[n] 日後。不正解 → stage 0 に戻し10分後に再出題対象。
@@ -222,11 +222,15 @@ async function isCorrect(word, texts, dir) {
       // "to give up" のような to 付き回答も許容
       if (heard.startsWith("to ")) heard = heard.slice(3);
       heards.push(heard);
+      const heardWords = heard.split(" ");
       for (const target of targets) {
         if (heard === target) return true;
+        const targetWords = target.split(" ");
+        // 語形変化した回答をそのまま正解にする（gained→gain, turned down→turn down）
+        if (heardWords.length === targetWords.length && phraseInflectionMatch(heardWords, targetWords)) return true;
         // 「I decline」のように余計な語が付いた回答は許容するが、聞き取り自体が別の登録熟語なら
         // 含んでいるだけで正解にはしない（"get up" は "get" を含むが receive の正解ではない）
-        if (!known.has(heard) && containsPhrase(heard, target)) return true;
+        if (!known.has(heard) && containsInflectedPhrase(heardWords, targetWords)) return true;
         if (containsPhrase(target, heard) && heard.length >= Math.max(3, target.length - 2)) return true;
       }
     }
@@ -244,6 +248,34 @@ async function isCorrect(word, texts, dir) {
         }
       }
     }
+  }
+  return false;
+}
+
+// heard が base の語形変化かどうか（gain → gained/gains/gaining, acquire → acquired など）。
+// 音声認識は活用したまま返してくることが多く、原形との完全一致だけでは正解を弾いてしまう
+function isInflectionOf(heard, base) {
+  if (heard === base) return true;
+  if (base.length < 3) return false;
+  const stems = [base];
+  if (base.endsWith("e")) stems.push(base.slice(0, -1));            // acquire → acquir(ed/ing)
+  if (/[bdglmnprt]$/.test(base)) stems.push(base + base.slice(-1)); // stop → stopp(ed/ing)
+  if (base.endsWith("y")) stems.push(base.slice(0, -1) + "i");      // carry → carri(ed/es)
+  for (const st of stems) {
+    for (const suf of ["", "s", "es", "d", "ed", "ing"]) {
+      if (st + suf === heard) return true;
+    }
+  }
+  return false;
+}
+// 語句どうしを語形変化を許して比べる（"turned down" と "turn down" を同じとみなす）
+function phraseInflectionMatch(heardWords, targetWords) {
+  return targetWords.every((tw, i) => isInflectionOf(heardWords[i], tw));
+}
+// heard の中に target の語句が（語形変化を許して）含まれるか
+function containsInflectedPhrase(heardWords, targetWords) {
+  for (let i = 0; i + targetWords.length <= heardWords.length; i++) {
+    if (phraseInflectionMatch(heardWords.slice(i), targetWords)) return true;
   }
   return false;
 }
@@ -1042,6 +1074,23 @@ function subjectKey(w) {
   return f.startsWith("i'") ? "i" : f;
 }
 
+// 内容語の判定用。主語が同じでも中身が無関係なら1つの文章にはつなげない
+const TOPIC_STOPWORDS = new Set([
+  "the","a","an","is","are","was","were","be","been","being","to","of","in","on","at","for","with",
+  "and","but","or","it","this","that","he","she","they","we","you","his","her","their","my","your",
+  "not","no","do","does","did","will","can","could","would","should","have","has","had","as","by",
+  "from","up","down","out","about","new","one","all","very","so","too","there","when","what","how",
+]);
+function contentWords(s) {
+  return new Set(normEn(s).split(" ").filter(x => x.length >= 3 && !TOPIC_STOPWORDS.has(x)));
+}
+// 2つの例文が同じ話題を扱っているか（共通の内容語があるか）
+function sharesTopic(a, b) {
+  const A = contentWords(a.ex), B = contentWords(b.ex);
+  for (const x of A) if (B.has(x)) return true;
+  return false;
+}
+
 // 接続表現の後ろに続けられるよう文頭を小文字にする（固有名詞・I はそのまま）
 function decapitalizeFirstWord(html) {
   const m = html.match(/^((?:<[^>]+>)*)([A-Za-z][A-Za-z']*)/);
@@ -1055,15 +1104,16 @@ function decapitalizeFirstWord(html) {
 // 主語が同じ例文どうしを優先して選ぶ。同じ人物の話が続くので、並べたときに
 // 文どうしが場面としてつながって読める
 function pickCoherentWords(cands, max) {
-  const groups = {};
-  for (const w of cands) {
-    const key = subjectKey(w);
-    (groups[key] = groups[key] || []).push(w);
-  }
   const byLen = arr => arr.slice().sort((a, b) => a.ex.length - b.ex.length);
-  const best = Object.values(groups).sort((a, b) => b.length - a.length)[0] || [];
-  const picked = byLen(best).slice(0, max);
-  // 同じ主語だけで足りなければ、短い例文から補う
+  // 主語も話題も共通していて「1つの文章としてつなげられる」組があれば優先して選ぶ
+  let best = [];
+  for (const seed of cands) {
+    const cluster = [seed].concat(
+      cands.filter(w => w !== seed && subjectKey(w) === subjectKey(seed) && sharesTopic(seed, w)));
+    if (cluster.length > best.length) best = cluster;
+  }
+  const picked = best.length >= 2 ? byLen(best).slice(0, max) : [];
+  // つなげられる組がなければ（あっても足りなければ）短い例文から補う
   for (const w of byLen(cands)) {
     if (picked.length >= max) break;
     if (!picked.includes(w)) picked.push(w);
@@ -1078,10 +1128,13 @@ function buildReviewPassage(words) {
   if (!cands.length) return null;
   const picked = pickCoherentWords(cands, REVIEW_MAX_SENTENCES);
 
+  // 主語が同じでも中身が無関係な例文をつなぐと「話がつながっていない」文章になるため、
+  // 同じ主語かつ共通の話題がある場合だけ1つの文章にまとめ、それ以外は別ブロックにする
   const groups = [];
   for (const w of picked) {
     const last = groups[groups.length - 1];
-    if (last && subjectKey(last[0]) === subjectKey(w)) last.push(w);
+    const prev = last && last[last.length - 1];
+    if (prev && subjectKey(prev) === subjectKey(w) && sharesTopic(prev, w)) last.push(w);
     else groups.push([w]);
   }
 
