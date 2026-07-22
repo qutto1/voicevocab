@@ -3,7 +3,7 @@
 
 "use strict";
 
-const APP_VERSION = "v21";
+const APP_VERSION = "v22";
 
 // ===== 間隔反復（忘却曲線） =====
 // stage n で正解 → 次回出題は INTERVALS_DAYS[n] 日後。不正解 → stage 0 に戻し10分後に再出題対象。
@@ -30,13 +30,17 @@ const QWORDS = [];
 (() => {
   const dict = {};
   WORDS.forEach(w => { dict[w.k + ":" + w.en] = w; });
-  const seen = new Set();
+  // 同じ語を会話とニュースの両方で出題できるようにする（別の文脈で覚え直せる）。
+  // ただし同じタイプの中では1回だけにする。出題は必ずどちらか一方のタイプなので、
+  // 1セッション内で同じ語が二重に出ることはない。学習の進捗は語のid単位で共有される。
+  const seenByType = {};
   PASSAGES.forEach(p => {
     PASSAGE_BY_ID[p.id] = p;
+    const seen = seenByType[p.type] || (seenByType[p.type] = new Set());
     p.targets.forEach(t => {
       const id = t.k + ":" + t.en;
       const entry = dict[id], line = p.lines[t.line];
-      if (!entry || !line || seen.has(id)) return; // 辞書にない・行がない・既出はスキップ
+      if (!entry || !line || seen.has(id)) return; // 辞書にない・行がない・同タイプで既出はスキップ
       seen.add(id);
       QWORDS.push(Object.assign({}, entry, {
         ex: line.en, exJa: line.ja, passageId: p.id, line: t.line,
@@ -44,6 +48,14 @@ const QWORDS = [];
     });
   });
 })();
+
+// 語の重複を除いた一覧（同じ語が会話とニュースの両方にある場合、学習状況や
+// 間違えた問題リストでは1語として数える）
+const QWORDS_UNIQ = [];
+{
+  const s = new Set();
+  QWORDS.forEach(w => { if (!s.has(w.id)) { s.add(w.id); QWORDS_UNIQ.push(w); } });
+}
 
 let progress = {};   // { id: {stage, due, right, wrong} }
 try { progress = JSON.parse(localStorage.getItem(PROG_KEY)) || {}; } catch (e) { progress = {}; }
@@ -553,7 +565,7 @@ function restoreSettings() {
 function renderStats() {
   const now = Date.now();
   let learned = 0, dueCount = 0, right = 0, wrong = 0;
-  for (const w of QWORDS) {
+  for (const w of QWORDS_UNIQ) {
     const p = progress[w.id];
     if (!p || p.stage < 0) continue;
     learned++;
@@ -670,7 +682,7 @@ function startWrongQuiz() {
   persistSettings(settings);
   const dir = questionDir(settings);
   const wrongKey = dir === "e2j" ? "wrongE2J" : "wrongJ2E";
-  const words = QWORDS.filter(w => progress[w.id] && progress[w.id][wrongKey] > 0);
+  const words = QWORDS_UNIQ.filter(w => progress[w.id] && progress[w.id][wrongKey] > 0);
   if (!words.length) { alert("間違えた問題がありません（" + (dir === "e2j" ? "英→和" : "和→英") + "）"); return; }
   ensureAudio();
   shuffle(words);
@@ -1005,6 +1017,8 @@ async function handleManual(action, item) {
   if (action === "quit") return "quit";
   if (action === "repeat") return "repeat";
   if (action === "skip") return "skip";
+  // 「わからない」ボタン: 待たずに不正解として正解を見せる（音声の「わからない」と同じ扱い）
+  if (action === "dontknow") return await finishAnswer(item, false, "（わからない）");
   return "repeat";
 }
 
@@ -1070,7 +1084,7 @@ function wrongListSection(dir, title) {
   const wrongKey = dir === "e2j" ? "wrongE2J" : "wrongJ2E";
   const rightKey = dir === "e2j" ? "rightE2J" : "rightJ2E";
   const lastWrongKey = dir === "e2j" ? "lastWrongE2J" : "lastWrongJ2E";
-  const items = QWORDS
+  const items = QWORDS_UNIQ
     .map(w => ({ w, p: progress[w.id] }))
     .filter(x => x.p && x.p[wrongKey] > 0)
     .sort((a, b) => wrongSortMode === "recent"
@@ -1200,12 +1214,17 @@ function renderReviewSection(words) {
   let firstPlain = "", firstIsNews = false;
   for (const [pid, ws] of byPassage) {
     const p = PASSAGE_BY_ID[pid];
+    // 会話は話者ごとに吹き出しを左右へ振り分ける（最初に登場した話者が左）
+    const speakers = [];
+    p.lines.forEach(l => { if (l.sp && !speakers.includes(l.sp)) speakers.push(l.sp); });
     const lines = p.lines.map((ln, i) => {
       const here = ws.filter(w => w.line === i).map(w => w.en);
       // 1行に複数の間違えた語があってもまとめて下線を引く（元の文に一度だけ適用する）
       const enHtml = here.length ? highlightTargets(ln.en, here, "rp-hl") : escapeHtml(ln.en);
-      const sp = ln.sp ? `<span class="rp-sp">${escapeHtml(ln.sp)}: </span>` : "";
-      return `<p class="rp-text">${sp}${enHtml}</p><p class="rp-ja">${escapeHtml(ln.ja)}</p>`;
+      const body = `<p class="rp-text">${enHtml}</p><p class="rp-ja">${escapeHtml(ln.ja)}</p>`;
+      if (!ln.sp) return body; // ニュースは地の文のまま
+      const side = speakers.indexOf(ln.sp) === 0 ? "left" : "right";
+      return `<div class="rp-turn ${side}"><div class="rp-bubble">${body}</div></div>`;
     }).join("");
     const src = p.source ? `｜出典 ${escapeHtml(new URL(p.source).host)}` : "";
     const head = `<p class="rp-title">${p.type === "news" ? "📰" : "💬"} ${escapeHtml(p.title)}${src}</p>`;
@@ -1220,7 +1239,7 @@ function renderReviewSection(words) {
 function renderResult() {
   const answered = session.right + session.wrong;
   const acc = answered ? Math.round(session.right / answered * 100) : 0;
-  let html = `回答数: ${answered}問<br>⭕ ${session.right}問 ／ ❌ ${session.wrong}問<br>正答率: <b>${acc}%</b>`;
+  let html = `回答 ${answered}問（⭕${session.right} ／ ❌${session.wrong}） 正答率 <b>${acc}%</b>`;
   if (!session.noRank) {
     // 通常セッション: 出題方向のランクの変化を表示し、履歴グラフも出す
     const dir = session.dirMode;
@@ -1259,7 +1278,7 @@ $("rankInfoClose").addEventListener("click", () => $("rankInfoOverlay").classLis
 $("rankInfoOverlay").addEventListener("click", e => { if (e.target === $("rankInfoOverlay")) $("rankInfoOverlay").classList.add("hidden"); });
 $("quitBtn").addEventListener("click", () => manualAction("quit") || (session.active && endSession()));
 $("repeatBtn").addEventListener("click", () => manualAction("repeat"));
-$("skipBtn").addEventListener("click", () => manualAction("skip"));
+$("dontKnowBtn").addEventListener("click", () => manualAction("dontknow"));
 // 一時停止ボタンは長押しで反応するが、テキストとして選択可能だと長押しでブラウザの
 // 文字選択モードに入ってしまい、pointerイベントが途中でキャンセルされて一時停止が効かなくなる。
 // pointerdown / contextmenu のデフォルト動作を止めて選択・メニューが発生しないようにする。

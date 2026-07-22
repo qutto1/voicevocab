@@ -136,7 +136,7 @@
   <div class="controls">
     <div class="btn-row">
       <button id="repeatBtn" class="ctl-btn">🔁 もう一度</button>
-      <button id="skipBtn" class="ctl-btn">⏭ スキップ</button>
+      <button id="dontKnowBtn" class="ctl-btn">🤷 わからない</button>
     </div>
     <div class="btn-row">
       <button id="pauseBtn" type="button" class="ctl-btn pause">🖐 押し続けて一時停止</button>
@@ -144,7 +144,7 @@
     <div class="btn-row" id="nextRow" style="visibility:hidden">
       <button id="nextBtn" class="ctl-btn next">次の問題 ▶</button>
     </div>
-    <p class="note">音声コマンド: 「スキップ」「もう一度」「終了」／指を離すと次の問題へ進みます</p>
+    <p class="note">音声コマンド: 「わからない」「スキップ」「もう一度」「終了」／指を離すと次の問題へ進みます</p>
   </div>
   <div id="historyBar" class="history-bar"></div>
   <div id="pauseOverlay" class="pause-overlay hidden">
@@ -171,8 +171,15 @@
 <!-- ===== 結果画面 ===== -->
 <div id="result" class="screen hidden">
   <h1>結果</h1>
+  <div class="start-row result-actions">
+    <button id="backBtn" class="big-btn">戻る</button>
+    <button id="retryWrongBtn" class="big-btn retry hidden">間違いに再挑戦</button>
+  </div>
   <div class="card" id="resultSummary"></div>
-  <div class="card hidden" id="rankGraphCard"><h2 id="rankGraphTitle">ランク推移</h2><div id="rankGraph"></div></div>
+  <details class="card hidden" id="rankGraphCard">
+    <summary id="rankGraphTitle">ランク推移</summary>
+    <div id="rankGraph"></div>
+  </details>
   <div class="card"><h2>間違えた問題</h2><div id="resultWrong"></div></div>
   <div class="card hidden" id="reviewPassageCard">
     <h2>間違えた語が出てきた場面</h2>
@@ -183,8 +190,6 @@
       <p id="reviewImageNote" class="rp-note"></p>
     </div>
   </div>
-  <button id="retryWrongBtn" class="big-btn retry hidden">🔁 間違えた問題だけ再挑戦</button>
-  <button id="backBtn" class="big-btn">設定に戻る</button>
 </div>
 
 <script src="lib/kuromoji/kuromoji.js"></script>

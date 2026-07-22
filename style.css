@@ -212,7 +212,7 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 /* 押している間だけ強調表示（実際の一時停止処理はグローバルなpointerdown/upで行う） */
 .ctl-btn.pause:active { background: var(--accent); color: #0b1220; opacity: 1; border-style: solid; }
 
-#resultWrong { font-size: 15px; line-height: 2; }
+#resultWrong { font-size: 15px; line-height: 1.5; }
 #resultSummary { font-size: 17px; line-height: 1.9; }
 
 .wl-sort-toggle { display: flex; gap: 8px; justify-content: center; margin-bottom: 16px; }
@@ -247,7 +247,15 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 }
 .rp-block + .rp-block { margin-top: 10px; }
 .rp-title { color: var(--sub); font-size: 13px; margin-bottom: 8px; }
-.rp-sp { color: var(--sub); font-size: 14px; }
+
+/* 会話は吹き出しにして、話者ごとに左右へ振り分ける */
+.rp-turn { display: flex; margin-bottom: 8px; }
+.rp-turn.left { justify-content: flex-start; }
+.rp-turn.right { justify-content: flex-end; }
+.rp-bubble { max-width: 88%; padding: 8px 12px; border-radius: 14px; }
+.rp-turn.left .rp-bubble { background: #2b3547; border-top-left-radius: 4px; }
+.rp-turn.right .rp-bubble { background: #3a4a6b; border-top-right-radius: 4px; }
+.rp-bubble .rp-ja { margin-bottom: 0; }
 .rp-block .rp-text + .rp-ja { margin-bottom: 7px; }
 /* 場面は行数が多くなるので、英文・和訳とも行間を詰めて一覧しやすくする */
 .rp-text { font-size: 18px; line-height: 1.35; color: var(--text); margin-bottom: 1px; }
@@ -261,8 +269,25 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 .rp-img-wrap { margin-top: 12px; text-align: center; }
 .rp-img { max-width: 100%; height: auto; border-radius: 12px; display: block; margin: 0 auto; }
 
-/* 結果画面の「間違えた問題だけ再挑戦」ボタン */
-.big-btn.retry { background: #f79009; margin-bottom: 4px; }
+/* 結果画面の「間違いに再挑戦」ボタン */
+.big-btn.retry { background: #f79009; }
+/* 結果画面の操作ボタンは上部に横並びで置く。
+   「戻る」は短いので幅を詰め、「間違いに再挑戦」が折り返さないようにする */
+.result-actions { margin-bottom: 16px; }
+/* .big-btn は width:100% なので、横並びでは幅を内容に合わせ直す */
+.result-actions .big-btn { width: auto; white-space: nowrap; }
+.result-actions #backBtn { flex: 0 0 auto; padding-left: 28px; padding-right: 28px; }
+.result-actions #retryWrongBtn { flex: 1; }
+
+/* ランク推移は折りたたんで表示（既定は閉じた状態） */
+#rankGraphCard > summary {
+  font-size: 13px; color: var(--sub); font-weight: 600;
+  cursor: pointer; list-style: none;
+}
+#rankGraphCard > summary::-webkit-details-marker { display: none; }
+#rankGraphCard > summary::before { content: "▶ "; font-size: 11px; }
+#rankGraphCard[open] > summary::before { content: "▼ "; }
+#rankGraphCard[open] > summary { margin-bottom: 10px; }
 
 /* ===== 音声認識が5回連続で失敗したときの一時中断オーバーレイ ===== */
 .pause-overlay {

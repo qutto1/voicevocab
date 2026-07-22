@@ -449,4 +449,318 @@ const PASSAGES = [
       { en: "receive", k: "w", line: 4 },
     ],
   },
+  {
+    id: "n2026-07-19-01", type: "news", title: "ウィンブルドンでシナーが連覇",
+    source: "https://www.britannica.com/topic/Major-Events-of-2026", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "Jannik Sinner of Italy won the difficult Wimbledon final again on July 12.", ja: "イタリアのヤニク・シナーが7月12日、厳しいウィンブルドン決勝を再び制した。" },
+      { en: "He beat Alexander Zverev of Germany in four sets.", ja: "彼はドイツのアレクサンダー・ズベレフを4セットで破った。" },
+      { en: "Sinner said he had to prepare carefully for the long match.", ja: "シナーは長い試合に向けて入念に準備しなければならなかったと語った。" },
+      { en: "He wants to continue playing at this level for many years.", ja: "彼はこの水準で何年も戦い続けたいと考えている。" },
+    ],
+    targets: [
+      { en: "prepare", k: "w", line: 2 },
+      { en: "continue", k: "w", line: 3 },
+      { en: "difficult", k: "w", line: 0 },
+    ],
+  },
 ];
+
+// 上のニュースは日々入れ替わる。以下はレベルごとの語をひととおり学べるようにするための
+// ニュース場面（数日以内の話題をもとに作成）。毎日の更新では古いものから差し替える。
+PASSAGES.push(
+  // ---- Lv1（中学）中心 ----
+  {
+    id: "n2026-07-20-01", type: "news", title: "米東部で記録的な暑さ",
+    source: "https://www.carbonbrief.org/", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "Very hot weather covered the eastern United States last week.", ja: "先週、米国東部を非常に暑い天気が覆った。" },
+      { en: "In more than twenty states the temperature was over 100 degrees.", ja: "20を超える州で気温が100度を超えた。" },
+      { en: "Officials said it was dangerous to work outside in the afternoon.", ja: "当局は午後に屋外で働くのは危険だと述べた。" },
+      { en: "They asked people to drink water and stay in a quiet, cool room.", ja: "当局は水を飲み、静かで涼しい部屋にいるよう呼びかけた。" },
+      { en: "Many schools decided to begin their summer holiday early.", ja: "多くの学校が夏休みを早めに始めることにした。" },
+    ],
+    targets: [
+      { en: "weather", k: "w", line: 0 },
+      { en: "dangerous", k: "w", line: 2 },
+      { en: "quiet", k: "w", line: 3 },
+      { en: "begin", k: "w", line: 4 },
+      { en: "holiday", k: "w", line: 4 },
+    ],
+  },
+  {
+    id: "n2026-07-20-02", type: "news", title: "学校でAI教育が広がる",
+    source: "https://sundayguardianlive.com/", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "A large school board in India will teach artificial intelligence in more schools.", ja: "インドの大きな教育委員会が、より多くの学校で人工知能を教える。" },
+      { en: "Students will learn how to build simple programs.", ja: "生徒は簡単なプログラムを作る方法を学ぶ。" },
+      { en: "Teachers say it is not difficult if students begin early.", ja: "教師たちは、生徒が早く始めれば難しくないと言う。" },
+      { en: "Each class will choose a useful topic and answer real questions.", ja: "各クラスは役に立つ題材を選び、実際の問いに答える。" },
+      { en: "The board will invite companies to help with the lessons.", ja: "委員会は授業を手伝う企業を招く予定だ。" },
+    ],
+    targets: [
+      { en: "build", k: "w", line: 1 },
+      { en: "choose", k: "w", line: 3 },
+      { en: "useful", k: "w", line: 3 },
+      { en: "answer", k: "w", line: 3 },
+      { en: "invite", k: "w", line: 4 },
+    ],
+  },
+  {
+    id: "n2026-07-21-01", type: "news", title: "海の酸素が減少",
+    source: "https://www.carbonbrief.org/", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "A famous study says oxygen is disappearing from oceans and rivers.", ja: "有名な研究によれば、海や川から酸素が失われつつある。" },
+      { en: "This change is dangerous for fish and other water animals.", ja: "この変化は魚や他の水生動物にとって危険だ。" },
+      { en: "A healthy ocean helps to keep the climate stable.", ja: "健全な海は気候を安定させる助けになる。" },
+      { en: "Researchers will carry equipment to the coast to study the water.", ja: "研究者は水を調べるため海岸へ機材を運ぶ。" },
+      { en: "They hope to remember this summer as a turning point.", ja: "彼らはこの夏を転換点として記憶したいと考えている。" },
+    ],
+    targets: [
+      { en: "healthy", k: "w", line: 2 },
+      { en: "carry", k: "w", line: 3 },
+      { en: "remember", k: "w", line: 4 },
+      { en: "famous", k: "w", line: 0 },
+    ],
+  },
+  {
+    id: "n2026-07-21-02", type: "news", title: "月面着陸に大型契約",
+    source: "https://www.sciencedaily.com/", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "NASA will pay almost 600 million dollars for four Moon landings.", ja: "NASAは4回の月面着陸に約6億ドルを支払う。" },
+      { en: "The flights are planned for late 2028, not tomorrow.", ja: "飛行は明日ではなく2028年後半に予定されている。" },
+      { en: "Companies must build landers that can carry heavy equipment.", ja: "各社は重い機材を運べる着陸船を作らなければならない。" },
+      { en: "Engineers will arrive at the test site next month.", ja: "技術者たちは来月、試験場に到着する。" },
+      { en: "They decided to test the engines together before the launch.", ja: "彼らは打ち上げ前にエンジンを一緒に試験することにした。" },
+    ],
+    targets: [
+      { en: "heavy", k: "w", line: 2 },
+      { en: "arrive", k: "w", line: 3 },
+      { en: "decide", k: "w", line: 4 },
+      { en: "together", k: "w", line: 4 },
+      { en: "tomorrow", k: "w", line: 1 },
+    ],
+  },
+
+  // ---- Lv2（高校）中心 ----
+  {
+    id: "n2026-07-19-02", type: "news", title: "自ら分解するプラスチック",
+    source: "https://www.sciencedaily.com/", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "Researchers created a plastic that can break itself down.", ja: "研究者たちは、自ら分解できるプラスチックを作り出した。" },
+      { en: "It includes bacteria that become active when the material is no longer needed.", ja: "それは、材料が不要になったときに活動を始める細菌を含んでいる。" },
+      { en: "The team explained that this could reduce plastic waste.", ja: "チームは、これがプラスチックごみを減らしうると説明した。" },
+      { en: "They will develop a version that is safe for the environment.", ja: "彼らは環境に安全な型を開発する予定だ。" },
+      { en: "Experts consider the result an important step.", ja: "専門家はこの成果を重要な一歩とみなしている。" },
+    ],
+    targets: [
+      { en: "create", k: "w", line: 0 },
+      { en: "include", k: "w", line: 1 },
+      { en: "explain", k: "w", line: 2 },
+      { en: "develop", k: "w", line: 3 },
+      { en: "consider", k: "w", line: 4 },
+    ],
+  },
+  {
+    id: "n2026-07-19-03", type: "news", title: "新興企業の資金調達が過去最高",
+    source: "https://techstartups.com/", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "Startups that aim to change society raised a record amount of money this year.", ja: "社会を変えることを目指す新興企業が今年、記録的な額の資金を集めた。" },
+      { en: "Artificial intelligence companies received most of the support.", ja: "人工知能の企業が支援の大半を受け取った。" },
+      { en: "Investors want to discover the next big idea early.", ja: "投資家は次の大きな着想を早く見つけたいと考えている。" },
+      { en: "Some experts suggest that the growth cannot continue forever.", ja: "一部の専門家は、この成長が永遠には続かないと示唆している。" },
+      { en: "Companies must provide clear results to keep the money coming.", ja: "企業は資金を得続けるために明確な成果を示さなければならない。" },
+    ],
+    targets: [
+      { en: "support", k: "w", line: 1 },
+      { en: "discover", k: "w", line: 2 },
+      { en: "suggest", k: "w", line: 3 },
+      { en: "provide", k: "w", line: 4 },
+      { en: "society", k: "w", line: 0 },
+    ],
+  },
+  {
+    id: "n2026-07-20-03", type: "news", title: "英印の自由貿易協定が発効",
+    source: "https://sundayguardianlive.com/", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "India and the United Kingdom have little experience with such a large trade agreement.", ja: "インドと英国は、これほど大きな貿易協定の経験がほとんどない。" },
+      { en: "The government of each country expects more investment.", ja: "両国の政府はより多くの投資を見込んでいる。" },
+      { en: "Lower costs should encourage small companies to sell abroad.", ja: "費用の低下は小さな企業が海外で売ることを後押しするはずだ。" },
+      { en: "Officials will require careful reports every year.", ja: "当局は毎年、慎重な報告を求める。" },
+      { en: "Both sides hope to improve their economies.", ja: "双方は自国の経済を改善したいと考えている。" },
+    ],
+    targets: [
+      { en: "government", k: "w", line: 1 },
+      { en: "encourage", k: "w", line: 2 },
+      { en: "require", k: "w", line: 3 },
+      { en: "improve", k: "w", line: 4 },
+      { en: "experience", k: "w", line: 0 },
+    ],
+  },
+  {
+    id: "n2026-07-21-03", type: "news", title: "睡眠障害の原因に免疫細胞",
+    source: "https://www.sciencedaily.com/", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "New knowledge explains the cause of sleep loss in Alzheimer's disease.", ja: "新しい知見がアルツハイマー病における睡眠障害の原因を説明している。" },
+      { en: "Doctors now realize that the brain's own immune cells are responsible.", ja: "医師たちは今、脳自身の免疫細胞が原因だと気づいている。" },
+      { en: "The team will compare healthy brains with affected ones.", ja: "チームは健康な脳と影響を受けた脳を比較する。" },
+      { en: "Doctors say patients should avoid long naps in the afternoon.", ja: "医師は患者が午後の長い昼寝を避けるべきだと言う。" },
+      { en: "They hope to protect memory in older people.", ja: "彼らは高齢者の記憶を守りたいと考えている。" },
+    ],
+    targets: [
+      { en: "compare", k: "w", line: 2 },
+      { en: "avoid", k: "w", line: 3 },
+      { en: "protect", k: "w", line: 4 },
+      { en: "knowledge", k: "w", line: 0 },
+      { en: "realize", k: "w", line: 1 },
+    ],
+  },
+
+  // ---- Lv3（大学受験）中心 ----
+  {
+    id: "n2026-07-19-04", type: "news", title: "AIが論文の不正を検出",
+    source: "https://www.sciencedaily.com/", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "A new AI tool examined 2.6 million cancer research papers.", ja: "新しいAIツールが260万件のがん研究論文を調べた。" },
+      { en: "It could distinguish normal writing from patterns seen in fake papers.", ja: "それは通常の文章と、偽の論文に見られる型とを区別できた。" },
+      { en: "The tool identified more than 250,000 studies as apparent problems.", ja: "そのツールは25万件を超える研究を明らかな問題として特定した。" },
+      { en: "Editors will evaluate each case before taking action.", ja: "編集者は対応の前に個々の事例を評価する。" },
+      { en: "Scientists emphasize that most research remains accurate.", ja: "科学者たちは、大半の研究は依然として正確だと強調している。" },
+    ],
+    targets: [
+      { en: "distinguish", k: "w", line: 1 },
+      { en: "apparent", k: "w", line: 2 },
+      { en: "evaluate", k: "w", line: 3 },
+      { en: "emphasize", k: "w", line: 4 },
+      { en: "accurate", k: "w", line: 4 },
+    ],
+  },
+  {
+    id: "n2026-07-20-04", type: "news", title: "AI向け電力需要が急増",
+    source: "https://techstartups.com/", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "Data centers caused a significant 37 percent jump in electricity use.", ja: "データセンターが電力使用量の37パーセントという著しい増加を引き起こした。" },
+      { en: "The company will negotiate with power suppliers for the next few years.", ja: "同社は今後数年、電力供給者と交渉する。" },
+      { en: "Engineers try to enhance efficiency without losing speed.", ja: "技術者は速度を落とさずに効率を高めようとしている。" },
+      { en: "The biggest obstacle is building new power lines quickly.", ja: "最大の障害は新しい送電線を素早く建設することだ。" },
+      { en: "Analysts anticipate even higher demand next year.", ja: "アナリストは来年さらに高い需要を予期している。" },
+    ],
+    targets: [
+      { en: "negotiate", k: "w", line: 1 },
+      { en: "enhance", k: "w", line: 2 },
+      { en: "obstacle", k: "w", line: 3 },
+      { en: "anticipate", k: "w", line: 4 },
+      { en: "significant", k: "w", line: 0 },
+    ],
+  },
+  {
+    id: "n2026-07-21-04", type: "news", title: "火星の環境改造を再び議論",
+    source: "https://www.sciencedaily.com/", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "New technologies reopened the debate, and no answer is temporary.", ja: "新しい技術が議論を再開させたが、どの答えも一時的なものではない。" },
+      { en: "Some scientists want to transform the planet into a place for life.", ja: "一部の科学者は、その惑星を生命の住める場所へ変えたいと考えている。" },
+      { en: "Others say we should not abandon simpler goals first.", ja: "他の科学者は、まず簡単な目標を捨てるべきではないと言う。" },
+      { en: "Any plan would need sufficient water and energy.", ja: "どんな計画も十分な水とエネルギーを必要とする。" },
+      { en: "Researchers must demonstrate that the idea is more than a dream.", ja: "研究者はその考えが夢以上のものだと実証しなければならない。" },
+    ],
+    targets: [
+      { en: "transform", k: "w", line: 1 },
+      { en: "abandon", k: "w", line: 2 },
+      { en: "sufficient", k: "w", line: 3 },
+      { en: "demonstrate", k: "w", line: 4 },
+      { en: "temporary", k: "w", line: 0 },
+    ],
+  },
+  {
+    id: "n2026-07-22-03", type: "news", title: "全固体電池の弱点を解明",
+    source: "https://www.sciencedaily.com/", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "Researchers explained how soft lithium cracks the hard ceramic inside batteries.", ja: "研究者は、柔らかいリチウムが電池内部の硬いセラミックをどう割るのかを説明した。" },
+      { en: "The cracks bring about short circuits and sudden failure.", ja: "その亀裂は短絡と突然の故障をもたらす。" },
+      { en: "The team hopes to eliminate the problem with a new coating.", ja: "チームは新しい被膜でその問題を取り除きたいと考えている。" },
+      { en: "Their hypothesis turned out to be correct in the first tests.", ja: "彼らの仮説は最初の試験で正しいと判明した。" },
+      { en: "Makers cannot exaggerate the safety of these batteries yet.", ja: "製造各社はまだこれらの電池の安全性を誇張することはできない。" },
+    ],
+    targets: [
+      { en: "bring about", k: "i", line: 1 },
+      { en: "eliminate", k: "w", line: 2 },
+      { en: "hypothesis", k: "w", line: 3 },
+      { en: "turn out", k: "i", line: 3 },
+      { en: "exaggerate", k: "w", line: 4 },
+    ],
+  },
+
+  // ---- Lv4（上級）中心 ----
+  {
+    id: "n2026-07-19-05", type: "news", title: "AI企業が政府と株式を協議",
+    source: "https://techstartups.com/", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "A leading AI company discussed giving the government a share of its business.", ja: "大手AI企業が、政府に事業の一部を渡すことを協議した。" },
+      { en: "Critics say such a deal could undermine fair competition.", ja: "批判する人々は、そうした取引が公正な競争を損ないかねないと言う。" },
+      { en: "Supporters call the plan legitimate and necessary.", ja: "支持者はその計画を正当かつ必要だと呼んでいる。" },
+      { en: "The wording of the proposal remains ambiguous.", ja: "提案の文言は依然としてあいまいなままだ。" },
+      { en: "Lawmakers will need adequate time to implement any rule.", ja: "議員はどんな規則を実施するにも十分な時間を必要とする。" },
+    ],
+    targets: [
+      { en: "undermine", k: "w", line: 1 },
+      { en: "legitimate", k: "w", line: 2 },
+      { en: "ambiguous", k: "w", line: 3 },
+      { en: "adequate", k: "w", line: 4 },
+      { en: "implement", k: "w", line: 4 },
+    ],
+  },
+  {
+    id: "n2026-07-20-05", type: "news", title: "熱波で死者、対策計画を更新",
+    source: "https://climateandhealth.substack.com/", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "The heat wave devastated many towns in the eastern United States.", ja: "熱波は米国東部の多くの町に大きな打撃を与えた。" },
+      { en: "Health officials say more deaths were inevitable without warnings.", ja: "保健当局は、警報がなければさらなる死は避けられなかったと言う。" },
+      { en: "A new plan will facilitate faster help for older residents.", ja: "新しい計画は高齢の住民への迅速な支援を促進する。" },
+      { en: "Cities must withstand longer periods of extreme heat.", ja: "都市はより長い酷暑の期間に耐えなければならない。" },
+      { en: "Cool shelters are indispensable in such conditions.", ja: "そうした状況では涼しい避難所が不可欠だ。" },
+    ],
+    targets: [
+      { en: "inevitable", k: "w", line: 1 },
+      { en: "facilitate", k: "w", line: 2 },
+      { en: "withstand", k: "w", line: 3 },
+      { en: "indispensable", k: "w", line: 4 },
+      { en: "devastate", k: "w", line: 0 },
+    ],
+  },
+  {
+    id: "n2026-07-21-05", type: "news", title: "AI投資の過熱に警告",
+    source: "https://techstartups.com/", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "Some analysts warn that AI investment may be too high.", ja: "一部のアナリストはAI投資が過熱しているかもしれないと警告する。" },
+      { en: "Share prices fluctuate sharply from week to week.", ja: "株価は週ごとに激しく変動している。" },
+      { en: "Two recent reports contradict each other about future profits.", ja: "最近の二つの報告は将来の利益について互いに矛盾している。" },
+      { en: "The numbers imply that growth may soon diminish.", ja: "その数字は成長がまもなく減少しうることを示唆している。" },
+      { en: "Investors want a comprehensive review before spending more.", ja: "投資家はさらに支出する前に包括的な見直しを求めている。" },
+    ],
+    targets: [
+      { en: "fluctuate", k: "w", line: 1 },
+      { en: "contradict", k: "w", line: 2 },
+      { en: "imply", k: "w", line: 3 },
+      { en: "diminish", k: "w", line: 3 },
+      { en: "comprehensive", k: "w", line: 4 },
+    ],
+  },
+  {
+    id: "n2026-07-22-04", type: "news", title: "光の新しい構造を発見",
+    source: "https://scitechdaily.com/", fetchedAt: "2026-07-22",
+    lines: [
+      { en: "Scientists in Singapore derive unusual light structures from an old optical effect.", ja: "シンガポールの科学者が、古い光学効果から珍しい光の構造を導き出している。" },
+      { en: "The effect was first described about 200 years ago.", ja: "その効果は約200年前に初めて記述された。" },
+      { en: "Researchers can now manipulate light with great precision.", ja: "研究者は今や高い精度で光を操作できる。" },
+      { en: "Early results were vague, but the pattern persists in every test.", ja: "初期の結果はあいまいだったが、その模様はどの試験でも持続している。" },
+      { en: "The team cannot rule out uses in future communication systems.", ja: "チームは将来の通信システムでの利用を除外できないとしている。" },
+    ],
+    targets: [
+      { en: "manipulate", k: "w", line: 2 },
+      { en: "vague", k: "w", line: 3 },
+      { en: "persist", k: "w", line: 3 },
+      { en: "rule out", k: "i", line: 4 },
+      { en: "derive", k: "w", line: 0 },
+    ],
+  },
+);
