@@ -3,7 +3,7 @@
 
 "use strict";
 
-const APP_VERSION = "v20";
+const APP_VERSION = "v21";
 
 // ===== 間隔反復（忘却曲線） =====
 // stage n で正解 → 次回出題は INTERVALS_DAYS[n] 日後。不正解 → stage 0 に戻し10分後に再出題対象。
@@ -1132,13 +1132,15 @@ function hashSeed(s) {
   return Math.abs(h) % 100000;
 }
 
-// CCライセンスのイラスト検索（画像生成が失敗したときの代替）。
-// 表情がわかるものを優先したいので、人物・表情を足した検索から順に試す
-async function openverseImageUrl(query) {
+// CCライセンスの画像検索（画像生成が失敗したときの代替）。
+// 表情がわかるものを優先したいので、人物・表情を足した検索から順に試す。
+// ニュースは実写、会話はイラストを探す
+async function openverseImageUrl(query, isNews) {
+  const category = isNews ? "photograph" : "illustration";
   for (const q of [query + " face expression", query + " person", query]) {
     try {
       const r = await fetch("https://api.openverse.org/v1/images/?q=" + encodeURIComponent(q) +
-        "&category=illustration&page_size=1");
+        "&category=" + category + "&page_size=1");
       if (!r.ok) continue;
       const j = await r.json();
       const it = j.results && j.results[0];
@@ -1148,7 +1150,7 @@ async function openverseImageUrl(query) {
   return null;
 }
 
-function loadReviewImage(prompt, fallbackQuery) {
+function loadReviewImage(prompt, fallbackQuery, isNews) {
   const wrap = $("reviewImageWrap"), img = $("reviewImage"), note = $("reviewImageNote");
   wrap.classList.remove("hidden");
   img.classList.add("hidden");
@@ -1162,7 +1164,7 @@ function loadReviewImage(prompt, fallbackQuery) {
   const useFallback = async () => {
     if (done || triedFallback) return fail();
     triedFallback = true;
-    const url = await openverseImageUrl(fallbackQuery || prompt);
+    const url = await openverseImageUrl(fallbackQuery || prompt, isNews);
     if (done) return;
     if (!url) return fail();
     img.src = url;
@@ -1173,9 +1175,12 @@ function loadReviewImage(prompt, fallbackQuery) {
   setTimeout(() => { if (!done && !triedFallback) useFallback(); }, 20000);
   // 場面を先に書くと絵の主題になりやすい。人数を絞って顔と表情が伝わる構図にする
   // （スタイル指定を先頭に置くと顔だけが並んだ絵になりやすかったため、この順番にしている）
+  // ニュースは報道写真らしい実写、会話はイラストにする
+  const style = isNews
+    ? " -- realistic photograph of this scene, photojournalism, real people, natural lighting, faces visible"
+    : " -- flat vector illustration depicting this situation, one or two people, faces showing clear emotion, soft colors";
   img.src = "https://image.pollinations.ai/prompt/" +
-    encodeURIComponent(prompt + " -- flat vector illustration depicting this situation, " +
-      "one or two people, faces showing clear emotion, soft colors") +
+    encodeURIComponent(prompt + style) +
     "?width=512&height=320&nologo=true&seed=" + hashSeed(prompt);
 }
 
@@ -1192,7 +1197,7 @@ function renderReviewSection(words) {
   card.classList.remove("hidden");
 
   const blocks = [];
-  let firstPlain = "";
+  let firstPlain = "", firstIsNews = false;
   for (const [pid, ws] of byPassage) {
     const p = PASSAGE_BY_ID[pid];
     const lines = p.lines.map((ln, i) => {
@@ -1205,11 +1210,11 @@ function renderReviewSection(words) {
     const src = p.source ? `｜出典 ${escapeHtml(new URL(p.source).host)}` : "";
     const head = `<p class="rp-title">${p.type === "news" ? "📰" : "💬"} ${escapeHtml(p.title)}${src}</p>`;
     blocks.push(`<div class="rp-block">${head}${lines}</div>`);
-    if (!firstPlain) firstPlain = p.lines.map(l => l.en).join(" ");
+    if (!firstPlain) { firstPlain = p.lines.map(l => l.en).join(" "); firstIsNews = p.type === "news"; }
   }
   $("reviewPassage").innerHTML = blocks.join("");
   $("reviewPassageNote").textContent = "※ 下線が今回間違えた語です";
-  loadReviewImage(firstPlain, words[0] ? words[0].en : "");
+  loadReviewImage(firstPlain, words[0] ? words[0].en : "", firstIsNews);
 }
 
 function renderResult() {

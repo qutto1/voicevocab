@@ -209,6 +209,210 @@ const PASSAGES = [
     ],
   },
 
+  // ---- Lv3（大学受験レベル）中心の場面 ----
+  {
+    id: "t013", type: "talk", title: "新製品の開発会議",
+    lines: [
+      { sp: "A", en: "Let me demonstrate the new feature.", ja: "新しい機能を実演させてください。" },
+      { sp: "B", en: "It looks good. How will you evaluate the results?", ja: "よさそうですね。結果はどう評価しますか。" },
+      { sp: "A", en: "We will keep testing to enhance the design.", ja: "設計を高めるためにテストを続けます。" },
+      { sp: "B", en: "Do we have sufficient time before the launch?", ja: "発売までに十分な時間はありますか。" },
+      { sp: "A", en: "The biggest obstacle is the budget.", ja: "最大の障害は予算です。" },
+    ],
+    targets: [
+      { en: "demonstrate", k: "w", line: 0 },
+      { en: "evaluate", k: "w", line: 1 },
+      { en: "enhance", k: "w", line: 2 },
+      { en: "sufficient", k: "w", line: 3 },
+      { en: "obstacle", k: "w", line: 4 },
+    ],
+  },
+  {
+    id: "t014", type: "talk", title: "仕事の引き継ぎ",
+    lines: [
+      { sp: "A", en: "I will take over your work while you are away.", ja: "留守の間、あなたの仕事を引き継ぎます。" },
+      { sp: "B", en: "Thanks. It is only a temporary change.", ja: "ありがとう。一時的な変更にすぎないよ。" },
+      { sp: "A", en: "I hope I can accomplish everything on time.", ja: "全部を期限までに成し遂げられるといいのですが。" },
+      { sp: "B", en: "I anticipate some trouble with the schedule.", ja: "予定については多少の問題を予期しているよ。" },
+      { sp: "A", en: "Yes, the delay is already apparent.", ja: "ええ、遅れはすでに明らかです。" },
+    ],
+    targets: [
+      { en: "take over", k: "i", line: 0 },
+      { en: "temporary", k: "w", line: 1 },
+      { en: "accomplish", k: "w", line: 2 },
+      { en: "anticipate", k: "w", line: 3 },
+      { en: "apparent", k: "w", line: 4 },
+    ],
+  },
+  {
+    id: "t015", type: "talk", title: "価格の交渉",
+    lines: [
+      { sp: "A", en: "We need to negotiate the price again.", ja: "もう一度価格を交渉する必要があります。" },
+      { sp: "B", en: "Can you account for the sudden increase?", ja: "急な値上がりを説明できますか。" },
+      { sp: "A", en: "I don't want to exaggerate, but costs really rose.", ja: "大げさに言いたくはないですが、費用は本当に上がりました。" },
+      { sp: "B", en: "Please give me accurate numbers.", ja: "正確な数字をください。" },
+      { sp: "A", en: "If we can't agree, we may have to abandon the plan.", ja: "合意できなければ、計画を断念しなければならないかもしれません。" },
+    ],
+    targets: [
+      { en: "negotiate", k: "w", line: 0 },
+      { en: "account for", k: "i", line: 1 },
+      { en: "exaggerate", k: "w", line: 2 },
+      { en: "accurate", k: "w", line: 3 },
+      { en: "abandon", k: "w", line: 4 },
+    ],
+  },
+  {
+    id: "t016", type: "talk", title: "英語学習の相談",
+    lines: [
+      { sp: "A", en: "How did you acquire such good pronunciation?", ja: "どうやってそんなにいい発音を習得したの？" },
+      { sp: "B", en: "I imitate native speakers every day.", ja: "毎日ネイティブの真似をしているよ。" },
+      { sp: "A", en: "I can't distinguish some sounds.", ja: "いくつかの音が聞き分けられないんだ。" },
+      { sp: "B", en: "Don't worry. You won't fall behind if you keep going.", ja: "心配ないよ。続けていれば遅れを取ることはない。" },
+      { sp: "A", en: "I hope it works out.", ja: "うまくいくといいな。" },
+    ],
+    targets: [
+      { en: "acquire", k: "w", line: 0 },
+      { en: "imitate", k: "w", line: 1 },
+      { en: "distinguish", k: "w", line: 2 },
+      { en: "fall behind", k: "i", line: 3 },
+      { en: "work out", k: "i", line: 4 },
+    ],
+  },
+  {
+    id: "t017", type: "talk", title: "街で偶然会う",
+    lines: [
+      { sp: "A", en: "I came across an old friend downtown.", ja: "街で昔の友達に偶然出会ったよ。" },
+      { sp: "B", en: "Nice. Did you drop by the new cafe?", ja: "いいね。新しいカフェには立ち寄った？" },
+      { sp: "A", en: "Yes. It turned out to be a great place.", ja: "うん。結局とてもいい店だったよ。" },
+      { sp: "B", en: "They transformed an old bank into a cafe.", ja: "古い銀行をカフェに変えたんだよね。" },
+      { sp: "A", en: "But they prohibit talking on the phone inside.", ja: "でも店内での電話は禁止しているよ。" },
+    ],
+    targets: [
+      { en: "come across", k: "i", line: 0 },
+      { en: "drop by", k: "i", line: 1 },
+      { en: "turn out", k: "i", line: 2 },
+      { en: "transform", k: "w", line: 3 },
+      { en: "prohibit", k: "w", line: 4 },
+    ],
+  },
+  {
+    id: "t018", type: "talk", title: "研究の発表",
+    lines: [
+      { sp: "A", en: "What is your hypothesis?", ja: "あなたの仮説は何ですか。" },
+      { sp: "B", en: "I emphasize that small changes bring about big results.", ja: "小さな変化が大きな結果をもたらすことを強調します。" },
+      { sp: "A", en: "How will you eliminate other factors?", ja: "他の要因はどうやって取り除きますか。" },
+      { sp: "B", en: "By careful testing. I hope the data lives up to my expectations.", ja: "慎重な実験によってです。データが期待に応えるといいのですが。" },
+    ],
+    targets: [
+      { en: "hypothesis", k: "w", line: 0 },
+      { en: "emphasize", k: "w", line: 1 },
+      { en: "bring about", k: "i", line: 1 },
+      { en: "eliminate", k: "w", line: 2 },
+      { en: "live up to", k: "i", line: 3 },
+    ],
+  },
+
+  // ---- Lv4（上級レベル）中心の場面 ----
+  {
+    id: "t019", type: "talk", title: "古い規則の見直し",
+    lines: [
+      { sp: "A", en: "Some people want to abolish this old rule.", ja: "この古い規則を廃止したい人もいます。" },
+      { sp: "B", en: "Is that a legitimate reason?", ja: "それは正当な理由ですか。" },
+      { sp: "A", en: "The wording is ambiguous, so no one understands it.", ja: "文言があいまいで、誰も理解できないのです。" },
+      { sp: "B", en: "If we implement a new rule, we need adequate time.", ja: "新しい規則を実施するなら、十分な時間が必要です。" },
+    ],
+    targets: [
+      { en: "abolish", k: "w", line: 0 },
+      { en: "legitimate", k: "w", line: 1 },
+      { en: "ambiguous", k: "w", line: 2 },
+      { en: "implement", k: "w", line: 3 },
+      { en: "adequate", k: "w", line: 3 },
+    ],
+  },
+  {
+    id: "t020", type: "talk", title: "計画の弱点を指摘する",
+    lines: [
+      { sp: "A", en: "Your plan sounds plausible, but the details are vague.", ja: "あなたの計画はもっともらしく聞こえますが、詳細があいまいです。" },
+      { sp: "B", en: "Which part?", ja: "どの部分ですか。" },
+      { sp: "A", en: "These two numbers contradict each other.", ja: "この二つの数字は互いに矛盾しています。" },
+      { sp: "B", en: "That could undermine the whole project.", ja: "それは計画全体を損ないかねません。" },
+      { sp: "A", en: "Some changes are inevitable.", ja: "いくらかの変更は避けられません。" },
+    ],
+    targets: [
+      { en: "plausible", k: "w", line: 0 },
+      { en: "vague", k: "w", line: 0 },
+      { en: "contradict", k: "w", line: 2 },
+      { en: "undermine", k: "w", line: 3 },
+      { en: "inevitable", k: "w", line: 4 },
+    ],
+  },
+  {
+    id: "t021", type: "talk", title: "災害からの復旧",
+    lines: [
+      { sp: "A", en: "The storm devastated the village.", ja: "嵐がその村を壊滅させました。" },
+      { sp: "B", en: "Did any building withstand the wind?", ja: "風に耐えた建物はありましたか。" },
+      { sp: "A", en: "Only the new hall. Clean water is indispensable now.", ja: "新しい会館だけです。今はきれいな水が不可欠です。" },
+      { sp: "B", en: "The city will compensate the families.", ja: "市が住民に補償するそうです。" },
+      { sp: "A", en: "Volunteers facilitate the recovery.", ja: "ボランティアが復旧を促進しています。" },
+    ],
+    targets: [
+      { en: "devastate", k: "w", line: 0 },
+      { en: "withstand", k: "w", line: 1 },
+      { en: "indispensable", k: "w", line: 2 },
+      { en: "compensate", k: "w", line: 3 },
+      { en: "facilitate", k: "w", line: 4 },
+    ],
+  },
+  {
+    id: "t022", type: "talk", title: "売上の見直し",
+    lines: [
+      { sp: "A", en: "Prices fluctuate every month.", ja: "価格は毎月変動します。" },
+      { sp: "B", en: "Does that imply a bigger problem?", ja: "それはもっと大きな問題を示唆していますか。" },
+      { sp: "A", en: "Our profit has diminished.", ja: "利益は減少しました。" },
+      { sp: "B", en: "We need a comprehensive review.", ja: "包括的な見直しが必要です。" },
+      { sp: "A", en: "We derive most of our income from one product.", ja: "収入の大半を一つの製品から得ています。" },
+    ],
+    targets: [
+      { en: "fluctuate", k: "w", line: 0 },
+      { en: "imply", k: "w", line: 1 },
+      { en: "diminish", k: "w", line: 2 },
+      { en: "comprehensive", k: "w", line: 3 },
+      { en: "derive", k: "w", line: 4 },
+    ],
+  },
+  {
+    id: "t023", type: "talk", title: "会議で意見を言う",
+    lines: [
+      { sp: "A", en: "Was that a deliberate mistake?", ja: "あれは意図的な間違いでしたか。" },
+      { sp: "B", en: "No, but he tried to manipulate the data.", ja: "いいえ、しかし彼はデータを操作しようとしました。" },
+      { sp: "A", en: "Fear can inhibit honest reporting.", ja: "恐れは正直な報告を妨げることがあります。" },
+      { sp: "B", en: "If the problem persists, we must speak up.", ja: "問題が続くなら、声を上げるべきです。" },
+      { sp: "A", en: "Don't hold back your opinion.", ja: "意見を控えないでください。" },
+    ],
+    targets: [
+      { en: "deliberate", k: "w", line: 0 },
+      { en: "manipulate", k: "w", line: 1 },
+      { en: "inhibit", k: "w", line: 2 },
+      { en: "persist", k: "w", line: 3 },
+      { en: "hold back", k: "i", line: 4 },
+    ],
+  },
+  {
+    id: "t024", type: "talk", title: "候補を絞り込む",
+    lines: [
+      { sp: "A", en: "We can rule out the first plan.", ja: "最初の案は除外できます。" },
+      { sp: "B", en: "I can't make out what this note says.", ja: "このメモに何と書いてあるか判読できません。" },
+      { sp: "A", en: "What does this abbreviation stand for?", ja: "この略語は何を表していますか。" },
+      { sp: "B", en: "Let's do away with these confusing labels.", ja: "この紛らわしい表示は廃止しましょう。" },
+    ],
+    targets: [
+      { en: "rule out", k: "i", line: 0 },
+      { en: "make out", k: "i", line: 1 },
+      { en: "stand for", k: "i", line: 2 },
+      { en: "do away with", k: "i", line: 3 },
+    ],
+  },
+
   // ================= ニュース（最新情報から作成。毎日追加・差し替え） =================
   {
     id: "n2026-07-22-01", type: "news", title: "スペインがワールドカップ優勝",

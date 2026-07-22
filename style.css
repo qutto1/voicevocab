@@ -248,14 +248,15 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 .rp-block + .rp-block { margin-top: 10px; }
 .rp-title { color: var(--sub); font-size: 13px; margin-bottom: 8px; }
 .rp-sp { color: var(--sub); font-size: 14px; }
-.rp-block .rp-text + .rp-ja { margin-bottom: 8px; }
-.rp-text { font-size: 18px; line-height: 1.9; color: var(--text); }
+.rp-block .rp-text + .rp-ja { margin-bottom: 7px; }
+/* 場面は行数が多くなるので、英文・和訳とも行間を詰めて一覧しやすくする */
+.rp-text { font-size: 18px; line-height: 1.35; color: var(--text); margin-bottom: 1px; }
 /* 間違えた語は下線＋色で強調 */
 .rp-text .rp-hl {
   color: #fdb022; font-weight: 800;
   text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px;
 }
-.rp-ja { color: var(--sub); font-size: 14px; line-height: 1.8; margin-top: 8px; }
+.rp-ja { color: var(--sub); font-size: 14px; line-height: 1.35; margin-top: 1px; }
 .rp-note { color: var(--sub); font-size: 12px; margin-top: 8px; }
 .rp-img-wrap { margin-top: 12px; text-align: center; }
 .rp-img { max-width: 100%; height: auto; border-radius: 12px; display: block; margin: 0 auto; }
