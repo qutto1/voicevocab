@@ -3,7 +3,7 @@
 
 "use strict";
 
-const APP_VERSION = "v16";
+const APP_VERSION = "v17";
 
 // ===== 間隔反復（忘却曲線） =====
 // stage n で正解 → 次回出題は INTERVALS_DAYS[n] 日後。不正解 → stage 0 に戻し10分後に再出題対象。
@@ -11,7 +11,7 @@ const INTERVALS_DAYS = [0, 1, 3, 7, 14, 30, 60, 120];
 const RELEARN_MS = 10 * 60 * 1000;      // 不正解後の再出題間隔
 const REQUEUE_GAP = 4;                   // セッション内で間違えた問題を何問後に再出題するか
 const DEFAULT_TIMEOUT_MS = 6000;         // 音声認識の待機時間の既定（設定画面で変更可）
-const REASK_LIMIT = 2;                   // 音声は検知したが解析できなかったとき「もう一度」を促す最大回数
+const REASK_LIMIT = 1;                   // 音声は検知したが解析できなかったとき「もう一度」を促す最大回数
 const NO_SPEECH_STREAK_LIMIT = 5;        // 何回連続で無反応だったら一時中断するか（タッチや発話があればカウントしない）
 const WRONG_WAIT_MS = 5000;              // 不正解後、次の問題までの待機時間
 const CORRECT_WAIT_MS = 700;             // 正解後、次の問題までの待機時間（通常）
@@ -171,6 +171,9 @@ function detectCommand(texts, dir) {
   if (/すきっぷ|ぱす|スキップ/.test(ja) || /\bskip\b|\bpass\b/.test(en)) return "skip";
   if (/もういちど|もう一度|りぴーと/.test(ja) || /\brepeat\b/.test(en)) return "repeat";
   if (/しゅうりょう|終了|おしまい|やめる/.test(ja) || /\bfinish\b|\bquit\b/.test(en)) return "quit";
+  // 「わからない」と言われたら待たずにすぐ不正解にして正解を見せる
+  if (/わからない|わからん|わかりません|分からない|分からん|分かりません|知らない|しらない/.test(ja) ||
+      /\bi dont know\b|\bdont know\b|\bno idea\b/.test(en)) return "dontknow";
   return null;
 }
 
@@ -889,12 +892,18 @@ async function askOne(item) {
 
   session.noSpeechStreak = 0;
   $("heard").textContent = "🎤 " + res.texts[0];
-  const cmd = detectCommand(res.texts, item.dir);
+  // 先に正誤を判定し、正解ならコマンドとは解釈しない。
+  // "give up" の正解「やめる」や類義語 "quit" のように、正解の語が音声コマンドと
+  // 同じ場合に、正しく答えたのにセッションが終了してしまうのを防ぐため
+  const correct = await isCorrect(w, res.texts, item.dir);
+  const cmd = correct ? null : detectCommand(res.texts, item.dir);
   if (cmd === "skip") return "skip";
   if (cmd === "repeat") return "repeat";
   if (cmd === "quit") return "quit";
+  // 「わからない」は考え込まずに答えを見たいということなので、すぐ不正解として正解を表示する
+  if (cmd === "dontknow") return await finishAnswer(item, false, res.texts[0]);
 
-  return await finishAnswer(item, await isCorrect(w, res.texts, item.dir), res.texts[0]);
+  return await finishAnswer(item, correct, res.texts[0]);
 }
 
 async function handleManual(action, item) {
@@ -1024,10 +1033,8 @@ const REVIEW_MAX_SENTENCES = 3;
 
 // 接続表現のあとでも大文字のままにする語（一人称と固有名詞）
 const KEEP_CAPS = new Set(["i", "english", "kyoto", "monday"]);
-// 2文目以降につける接続表現。主語が前の文と同じなら話の続きとしてつなぎ、
-// 変わるなら話題を添える言い方にする（そのほうが会話として自然に読める）
+// 同じ主語で続く文につける接続表現。主語が変わる文は無理につなげず別ブロックに分ける
 const SAME_SUBJ_LINKS = [null, { en: "And ", ja: "そして" }, { en: "In the end, ", ja: "最後に" }];
-const DIFF_SUBJ_LINKS = [null, { en: "Also, ", ja: "それから" }, { en: "By the way, ", ja: "ところで" }];
 
 // 例文の主語（文頭の語）。同じ人物の話かどうかの判定に使う
 function subjectKey(w) {
@@ -1064,22 +1071,34 @@ function pickCoherentWords(cands, max) {
   return picked;
 }
 
+// 選んだ例文をブロックに分ける。主語が同じ文は1つのまとまりとして接続表現でつなぎ、
+// 主語が変わる文は無理に1つの文章にせず、別ブロックとして区切って見せる
 function buildReviewPassage(words) {
   const cands = words.filter(w => w.ex);
   if (!cands.length) return null;
   const picked = pickCoherentWords(cands, REVIEW_MAX_SENTENCES);
-  const htmlParts = [], jaParts = [];
-  picked.forEach((w, i) => {
-    const links = i > 0 && subjectKey(w) === subjectKey(picked[i - 1]) ? SAME_SUBJ_LINKS : DIFF_SUBJ_LINKS;
-    const link = i > 0 ? links[Math.min(i, links.length - 1)] : null;
-    let s = highlightTarget(w.ex, w.en, "rp-hl");
-    if (link) s = link.en + decapitalizeFirstWord(s);
-    htmlParts.push(s);
-    if (w.exJa) jaParts.push(link ? link.ja + w.exJa : w.exJa);
+
+  const groups = [];
+  for (const w of picked) {
+    const last = groups[groups.length - 1];
+    if (last && subjectKey(last[0]) === subjectKey(w)) last.push(w);
+    else groups.push([w]);
+  }
+
+  const blocks = groups.map(group => {
+    const htmlParts = [], jaParts = [];
+    group.forEach((w, i) => {
+      const link = i > 0 ? SAME_SUBJ_LINKS[Math.min(i, SAME_SUBJ_LINKS.length - 1)] : null;
+      let s = highlightTarget(w.ex, w.en, "rp-hl");
+      if (link) s = link.en + decapitalizeFirstWord(s);
+      htmlParts.push(s);
+      if (w.exJa) jaParts.push(link ? link.ja + w.exJa : w.exJa);
+    });
+    return { html: htmlParts.join(" "), ja: jaParts.join(" ") };
   });
+
   return {
-    html: htmlParts.join(" "),
-    ja: jaParts.join(" "),
+    blocks,
     plain: picked.map(w => w.ex).join(" "),
     used: picked.length,
     total: words.length,
@@ -1144,8 +1163,11 @@ function renderReviewSection(words) {
   const p = buildReviewPassage(words);
   if (!p) { card.classList.add("hidden"); return; }
   card.classList.remove("hidden");
-  $("reviewPassage").innerHTML = p.html;
-  $("reviewPassageJa").textContent = p.ja;
+  // 主語が違って1つの文章にまとめられない分は、区切り線つきの別ブロックとして表示する
+  $("reviewPassage").innerHTML = p.blocks.map(b =>
+    `<div class="rp-block"><p class="rp-text">${b.html}</p>` +
+    (b.ja ? `<p class="rp-ja">${escapeHtml(b.ja)}</p>` : "") + `</div>`
+  ).join("");
   $("reviewPassageNote").textContent =
     p.total > p.used ? `※ 間違えた${p.total}語のうち、下線の${p.used}語を使った文章です` : "";
   loadReviewImage(p.plain, words[0] ? words[0].en : "");

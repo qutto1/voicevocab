@@ -238,6 +238,14 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 #session { padding-bottom: 90px; }
 
 /* ===== 結果画面: 間違えた語を使った文章＋イラスト ===== */
+/* 1つの文章にまとめられなかった分は、枠で囲って別の文章だと分かるようにする */
+.rp-block {
+  background: rgba(255, 255, 255, 0.04);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.rp-block + .rp-block { margin-top: 10px; }
 .rp-text { font-size: 18px; line-height: 1.9; color: var(--text); }
 /* 間違えた語は下線＋色で強調 */
 .rp-text .rp-hl {
