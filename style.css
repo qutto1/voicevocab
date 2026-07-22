@@ -237,6 +237,18 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 /* 下部固定の履歴バー(3行)に隠れないよう余白を確保 */
 #session { padding-bottom: 90px; }
 
+/* ===== 結果画面: 間違えた語を使った文章＋イラスト ===== */
+.rp-text { font-size: 18px; line-height: 1.9; color: var(--text); }
+/* 間違えた語は下線＋色で強調 */
+.rp-text .rp-hl {
+  color: #fdb022; font-weight: 800;
+  text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px;
+}
+.rp-ja { color: var(--sub); font-size: 14px; line-height: 1.8; margin-top: 8px; }
+.rp-note { color: var(--sub); font-size: 12px; margin-top: 8px; }
+.rp-img-wrap { margin-top: 12px; text-align: center; }
+.rp-img { max-width: 100%; height: auto; border-radius: 12px; display: block; margin: 0 auto; }
+
 /* 結果画面の「間違えた問題だけ再挑戦」ボタン */
 .big-btn.retry { background: #f79009; margin-bottom: 4px; }
 

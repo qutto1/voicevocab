@@ -3,7 +3,7 @@
 
 "use strict";
 
-const APP_VERSION = "v14";
+const APP_VERSION = "v15";
 
 // ===== 間隔反復（忘却曲線） =====
 // stage n で正解 → 次回出題は INTERVALS_DAYS[n] 日後。不正解 → stage 0 に戻し10分後に再出題対象。
@@ -211,18 +211,81 @@ async function isCorrect(word, texts, dir) {
   } else {
     // 出題語そのものに加えて、類義語での回答も正解として認める
     const targets = [word.en, ...(word.syn || [])].map(normEn);
+    const known = getKnownEnSet();
+    const heards = [];
     for (const t of texts) {
       let heard = normEn(t);
       if (!heard) continue;
       // "to give up" のような to 付き回答も許容
       if (heard.startsWith("to ")) heard = heard.slice(3);
+      heards.push(heard);
       for (const target of targets) {
-        if (heard === target || heard.includes(target)) return true;
-        if (target.includes(heard) && heard.length >= Math.max(3, target.length - 2)) return true;
+        if (heard === target) return true;
+        // 「I decline」のように余計な語が付いた回答は許容するが、聞き取り自体が別の登録熟語なら
+        // 含んでいるだけで正解にはしない（"get up" は "get" を含むが receive の正解ではない）
+        if (!known.has(heard) && containsPhrase(heard, target)) return true;
+        if (containsPhrase(target, heard) && heard.length >= Math.max(3, target.length - 2)) return true;
+      }
+    }
+    // 綴りが近い場合の救済。英語の音声認識は正しく発音しても近い別の語を返すことがあり
+    // （decline → recline 等）、表記の完全一致だけだと正解が弾かれてしまうため。
+    // ただし increase と decrease のように「綴りは近いが意味が逆」の語を誤って正解にしないよう、
+    // 許容は1文字違いまでとし、聞き取り結果がそれ自体で登録語のときは近似一致を使わない。
+    for (const heard of heards) {
+      if (known.has(heard)) continue; // 別の登録語をはっきり言っている → 近似一致させない
+      for (const target of targets) {
+        if (target.length < 5) continue;
+        if (editDistance(heard, target) <= 1) return true;
+        for (const hw of heard.split(" ")) {
+          if (hw.length >= 5 && !known.has(hw) && editDistance(hw, target) <= 1) return true;
+        }
       }
     }
   }
   return false;
+}
+
+// 単語境界を守った包含判定。単純な部分文字列一致だと "breakfast" が "break" を、
+// "inexpensive" が "expensive" を含むと見なされ、意味の違う（ときには逆の）語が正解になってしまう
+function containsPhrase(hay, needle) {
+  if (!needle || needle.length > hay.length) return false;
+  let from = 0;
+  for (;;) {
+    const i = hay.indexOf(needle, from);
+    if (i < 0) return false;
+    const before = i === 0 ? " " : hay[i - 1];
+    const after = i + needle.length >= hay.length ? " " : hay[i + needle.length];
+    if (before === " " && after === " ") return true;
+    from = i + 1;
+  }
+}
+
+// 収録されている英語表記（出題語＋類義語）の集合。近似一致の誤爆を防ぐために使う
+let knownEnSet = null;
+function getKnownEnSet() {
+  if (!knownEnSet) {
+    knownEnSet = new Set();
+    for (const w of WORDS) {
+      knownEnSet.add(normEn(w.en));
+      for (const s of (w.syn || [])) knownEnSet.add(normEn(s));
+    }
+  }
+  return knownEnSet;
+}
+
+// レーベンシュタイン距離（音声認識のゆれを吸収する近似一致用）
+function editDistance(a, b) {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > 3) return 99; // 明らかに違う長さは打ち切り
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
 }
 
 // ===== 効果音（Web Audio） =====
@@ -261,11 +324,11 @@ function chime(freq, startOffset, dur, vol) {
   osc.start(t);
   osc.stop(t + dur + 0.05);
 }
-function playCorrect() { // ピンポーン♪（高→低の2音チャイム、2音目は余韻を長く）
+function playCorrect() { // ピンポン♪（高→低の2音チャイム、テンポよく短めに）
   ensureAudio();
   if (!audioCtx) return;
-  chime(1319, 0, 0.5, 0.3);     // ピン (E6)
-  chime(1047, 0.28, 0.9, 0.3);  // ポーン (C6)
+  chime(1319, 0, 0.16, 0.3);    // ピン (E6)
+  chime(1047, 0.12, 0.3, 0.3);  // ポン (C6)
 }
 function playWrong() { // ブザー（低い2連音）
   ensureAudio();
@@ -549,7 +612,9 @@ function beginSession(settings, words, opts) {
   runLoop();
 }
 
-function endSession() {
+// announce: 全問出題しきって終わったときだけ true（音声で終了を知らせる）
+function endSession(announce) {
+  const speakEnd = announce && session.settings && session.settings.speakQ;
   session.active = false;
   stopListening();
   speechSynthesis.cancel();
@@ -558,6 +623,8 @@ function endSession() {
   if (!session.noRank && session.dirMode) commitRank(session.dirMode);
   renderResult();
   showScreen("result");
+  // ハンズフリーで終了に気づけるよう読み上げる（画面を見ていない前提）
+  if (speakEnd) speak("問題は終了しました", "ja-JP", 1.0);
 }
 
 function setPhase(text) {
@@ -599,10 +666,9 @@ function tokenMatches(exTok, tgtTok) {
 // visibility切り替えだけで表示するため、正誤判定の前後でレイアウトが一切動かない。
 // e2j: 英文はそのまま見せてよいが、和訳(ex-ja)だけが答えのヒントになるのでspoiler化
 // j2e: 英語自体が答えになるため、例文全体をspoiler化
-function exampleHtml(w, dir) {
-  if (!w.ex) return "";
-  const ex = w.ex;
-  const tgt = w.en.split(/\s+/);
+// 文中の出題語（活用形を含む）を cls つきの <b> で囲んだHTMLを返す
+function highlightTarget(ex, targetEn, cls) {
+  const tgt = targetEn.split(/\s+/);
   const re = /[A-Za-z']+/g;
   const toks = [];
   let m;
@@ -620,13 +686,18 @@ function exampleHtml(w, dir) {
     if (ti === tgt.length) matched = picks;
   }
   const hl = new Set(matched || []);
-  let sentence = "", pos = 0;
+  let out = "", pos = 0;
   toks.forEach((tk, idx) => {
-    sentence += escapeHtml(ex.slice(pos, tk.start));
-    sentence += hl.has(idx) ? `<b class="ex-hl">${escapeHtml(tk.text)}</b>` : escapeHtml(tk.text);
+    out += escapeHtml(ex.slice(pos, tk.start));
+    out += hl.has(idx) ? `<b class="${cls}">${escapeHtml(tk.text)}</b>` : escapeHtml(tk.text);
     pos = tk.end;
   });
-  sentence += escapeHtml(ex.slice(pos));
+  return out + escapeHtml(ex.slice(pos));
+}
+
+function exampleHtml(w, dir) {
+  if (!w.ex) return "";
+  const sentence = highlightTarget(w.ex, w.en, "ex-hl");
   const jaSpan = `<span class="ex-ja spoiler">${escapeHtml(w.exJa || "")}</span>`;
   if (dir === "e2j") return sentence + jaSpan;
   return `<span class="spoiler">${sentence}${jaSpan}</span>`;
@@ -735,6 +806,10 @@ async function runLoop() {
     if (outcome === "correct") {
       session.right++;
       recordAnswer(item.word, true, item.dir);
+      // 一度間違えても再出題で正解できた問題は「間違えた問題」から外す
+      // （結果画面の一覧や再挑戦の対象に出さない）
+      const fixed = session.wrongList.findIndex(x => x.id === item.word.id);
+      if (fixed >= 0) session.wrongList.splice(fixed, 1);
     } else { // wrong / skip
       session.wrong++;
       recordAnswer(item.word, false, item.dir);
@@ -748,7 +823,7 @@ async function runLoop() {
     }
     session.index++;
   }
-  if (session.active) endSession();
+  if (session.active) endSession(true); // 全問出題しきった終了だけ音声で知らせる
 }
 
 // 1問の出題〜判定。戻り値: "correct" | "wrong" | "skip" | "repeat" | "quit"
@@ -941,6 +1016,84 @@ function renderRankGraph(dir) {
     `<polyline points="${pts}" fill="none" class="rg-line"/>${dots}</svg>`;
 }
 
+// ===== 間違えた語を使った短い文章＋イラスト（結果画面の下部） =====
+// 文章は端末内で組み立てる（無料で使える外部の文章生成APIはBot対策で呼べないため）。
+// 各語には日常会話の例文が用意してあるので、短いものから数文だけつなげて「ごく短い文章」にする。
+// イラストはその文章をもとにWebから取得する。
+const REVIEW_MAX_SENTENCES = 3;
+
+function buildReviewPassage(words) {
+  const withEx = words.filter(w => w.ex);
+  if (!withEx.length) return null;
+  // ごく短くするため、短い例文から優先して数文だけ使う
+  const picked = withEx.slice().sort((a, b) => a.ex.length - b.ex.length).slice(0, REVIEW_MAX_SENTENCES);
+  return {
+    html: picked.map(w => highlightTarget(w.ex, w.en, "rp-hl")).join(" "),
+    ja: picked.map(w => w.exJa).filter(Boolean).join(" "),
+    plain: picked.map(w => w.ex).join(" "),
+    used: picked.length,
+    total: words.length,
+  };
+}
+
+function hashSeed(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h) % 100000;
+}
+
+// CCライセンスのイラスト検索（画像生成が失敗したときの代替）
+async function openverseImageUrl(query) {
+  try {
+    const r = await fetch("https://api.openverse.org/v1/images/?q=" + encodeURIComponent(query) +
+      "&category=illustration&page_size=1");
+    if (!r.ok) return null;
+    const j = await r.json();
+    const it = j.results && j.results[0];
+    return it ? (it.thumbnail || it.url) : null;
+  } catch (e) { return null; }
+}
+
+function loadReviewImage(prompt, fallbackQuery) {
+  const wrap = $("reviewImageWrap"), img = $("reviewImage"), note = $("reviewImageNote");
+  wrap.classList.remove("hidden");
+  img.classList.add("hidden");
+  note.textContent = "イラストを取得中…";
+  let done = false, triedFallback = false;
+  const fail = () => {
+    if (done) return;
+    done = true;
+    wrap.classList.add("hidden");
+  };
+  const useFallback = async () => {
+    if (done || triedFallback) return fail();
+    triedFallback = true;
+    const url = await openverseImageUrl(fallbackQuery || prompt);
+    if (done) return;
+    if (!url) return fail();
+    img.src = url;
+  };
+  img.onload = () => { if (done) return; done = true; img.classList.remove("hidden"); note.textContent = ""; };
+  img.onerror = () => useFallback();
+  // 画像生成は時間がかかることがあるので、待ちすぎたら検索画像に切り替える
+  setTimeout(() => { if (!done && !triedFallback) useFallback(); }, 20000);
+  img.src = "https://image.pollinations.ai/prompt/" +
+    encodeURIComponent("simple flat cartoon illustration, everyday life scene: " + prompt) +
+    "?width=512&height=320&nologo=true&seed=" + hashSeed(prompt);
+}
+
+function renderReviewSection(words) {
+  const card = $("reviewPassageCard");
+  const p = buildReviewPassage(words);
+  if (!p) { card.classList.add("hidden"); return; }
+  card.classList.remove("hidden");
+  $("reviewPassage").innerHTML = p.html;
+  $("reviewPassageJa").textContent = p.ja;
+  $("reviewPassageNote").textContent =
+    p.total > p.used ? `※ 間違えた${p.total}語のうち、下線の${p.used}語を使った文章です` : "";
+  loadReviewImage(p.plain, words[0] ? words[0].en : "");
+}
+
 function renderResult() {
   const answered = session.right + session.wrong;
   const acc = answered ? Math.round(session.right / answered * 100) : 0;
@@ -970,6 +1123,8 @@ function renderResult() {
     : "なし 🎉";
   // 間違いがあるときだけ「間違えた問題だけ再挑戦」を出す
   $("retryWrongBtn").classList.toggle("hidden", !session.wrongList.length);
+  // 画面下部に、間違えた語を使った短い文章とイラストを表示
+  renderReviewSection(session.wrongList);
 }
 
 // ===== イベント =====
