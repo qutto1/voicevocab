@@ -3,7 +3,7 @@
 
 "use strict";
 
-const APP_VERSION = "v19";
+const APP_VERSION = "v20";
 
 // ===== 間隔反復（忘却曲線） =====
 // stage n で正解 → 次回出題は INTERVALS_DAYS[n] 日後。不正解 → stage 0 に戻し10分後に再出題対象。
@@ -132,7 +132,7 @@ function buildQueue(settings) {
   const now = Date.now();
   const cand = [];
   for (const p of PASSAGES) {
-    if (!settings.types.includes(p.type)) continue;
+    if (p.type !== settings.type) continue;
     const words = QWORDS.filter(w => w.passageId === p.id &&
       settings.levels.includes(w.lv) && settings.kinds.includes(w.k));
     if (!words.length) continue;
@@ -521,12 +521,12 @@ function readSettings() {
   const levels = [...document.querySelectorAll("#levelChips input:checked")]
     .flatMap(i => i.value.split(",").map(Number));
   const kinds = [...document.querySelectorAll("#kindChips input:checked")].map(i => i.value);
-  const types = [...document.querySelectorAll("#typeChips input:checked")].map(i => i.value);
+  const type = document.querySelector("#typeChips input:checked").value;
   const mode = document.querySelector("#modeChips input:checked").value;
   const count = +document.querySelector("#countChips input:checked").value;
   const timeout = +document.querySelector("#timeoutChips input:checked").value * 1000;
   return {
-    levels, kinds, types, mode, count, timeout,
+    levels, kinds, type, mode, count, timeout,
     speakQ: $("optSpeak").checked, auto: $("optAuto").checked,
     showSyn: $("optSyn").checked, showIpa: $("optIpa").checked,
   };
@@ -539,7 +539,7 @@ function restoreSettings() {
   document.querySelectorAll("#levelChips input").forEach(i =>
     i.checked = i.value.split(",").some(v => (s.levels || []).includes(+v)));
   document.querySelectorAll("#kindChips input").forEach(i => i.checked = s.kinds.includes(i.value));
-  if (s.types) document.querySelectorAll("#typeChips input").forEach(i => i.checked = s.types.includes(i.value));
+  if (s.type) document.querySelectorAll("#typeChips input").forEach(i => i.checked = i.value === s.type);
   document.querySelectorAll("#modeChips input").forEach(i => i.checked = i.value === s.mode);
   document.querySelectorAll("#countChips input").forEach(i => i.checked = +i.value === s.count);
   if (s.timeout) document.querySelectorAll("#timeoutChips input").forEach(i => i.checked = +i.value * 1000 === s.timeout);
@@ -637,13 +637,28 @@ async function requestWakeLock() {
   try { session.wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
 }
 
+// 表示上のレベル名（データのlv1,2をLv1にまとめている）
+const LV_LABEL = { 1: "Lv1", 2: "Lv1", 3: "Lv2", 4: "Lv3", 5: "Lv4" };
+
+// 該当する問題がないとき、何を選べばよいかが分かるように案内する。
+// 問題タイプごとに収録レベルが偏っている（特にニュースは語数が少ない）ため
+function noQuestionMessage(settings) {
+  const typeName = settings.type === "news" ? "ニュース" : "会話";
+  const pool = QWORDS.filter(w => PASSAGE_BY_ID[w.passageId] && PASSAGE_BY_ID[w.passageId].type === settings.type);
+  const kindPool = pool.filter(w => settings.kinds.includes(w.k));
+  const levels = [...new Set(kindPool.map(w => LV_LABEL[w.lv]))].sort();
+  if (!pool.length) return `「${typeName}」の問題はまだありません。`;
+  if (!levels.length) return `「${typeName}」には選択中の種類（単語／熟語）の問題がありません。`;
+  return `「${typeName}」の選択中のレベルには問題がありません。\n選べるレベル: ${levels.join(" ／ ")}`;
+}
+
 async function startSession() {
   const settings = readSettings();
   if (!settings.levels.length || !settings.kinds.length) { alert("レベルと種類を1つ以上選んでください"); return; }
   ensureAudio(); // ユーザー操作の中でAudioContextを起動しておく
   persistSettings(settings);
   const queue = buildQueue(settings);
-  if (!queue.length) { alert("該当する問題がありません"); return; }
+  if (!queue.length) { alert(noQuestionMessage(settings)); return; }
   beginSession(settings, queue, { noRank: false });
 }
 
