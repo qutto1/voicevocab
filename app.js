@@ -3,7 +3,7 @@
 
 "use strict";
 
-const APP_VERSION = "v18";
+const APP_VERSION = "v19";
 
 // ===== 間隔反復（忘却曲線） =====
 // stage n で正解 → 次回出題は INTERVALS_DAYS[n] 日後。不正解 → stage 0 に戻し10分後に再出題対象。
@@ -21,6 +21,29 @@ const SETTINGS_KEY = "vv_settings_v4";   // 設定はcookieに保存（キー名
 const RANK_KEY = "vv_rank_v2";           // ランク算出用データ（出題方向別）
 const RECENT_MAX = 50;                   // ランクは直近この問数の正答率とレベルから算出
 const RANK_HIST_MAX = 10;                // 結果画面のグラフに残すランク履歴の数
+
+// ===== 出題用の単語リストを場面(passages.js)と辞書(words.js)から組み立てる =====
+// 例文は「その語が実際に出てくる場面の1行」をそのまま使う。これにより、復習画面では
+// 間違えた語を含む場面を丸ごと見せられる（無関係な文を並べずに済む）。
+const PASSAGE_BY_ID = {};
+const QWORDS = [];
+(() => {
+  const dict = {};
+  WORDS.forEach(w => { dict[w.k + ":" + w.en] = w; });
+  const seen = new Set();
+  PASSAGES.forEach(p => {
+    PASSAGE_BY_ID[p.id] = p;
+    p.targets.forEach(t => {
+      const id = t.k + ":" + t.en;
+      const entry = dict[id], line = p.lines[t.line];
+      if (!entry || !line || seen.has(id)) return; // 辞書にない・行がない・既出はスキップ
+      seen.add(id);
+      QWORDS.push(Object.assign({}, entry, {
+        ex: line.en, exJa: line.ja, passageId: p.id, line: t.line,
+      }));
+    });
+  });
+})();
 
 let progress = {};   // { id: {stage, due, right, wrong} }
 try { progress = JSON.parse(localStorage.getItem(PROG_KEY)) || {}; } catch (e) { progress = {}; }
@@ -101,21 +124,38 @@ function recordAnswer(word, correct, dir) {
   saveProgress();
 }
 
-// ===== 出題キュー生成 =====
+// ===== 出題キュー生成（場面単位） =====
+// 同じ場面の語を続けて出題する。こうすると間違えた語が同じ場面に集まるので、
+// 結果画面でその場面を丸ごと見せれば、つながりのある文章として復習できる。
+// 忘却曲線は場面の並び順に使う（復習期限が来た語を多く含む場面を先に出す）。
 function buildQueue(settings) {
   const now = Date.now();
-  const pool = WORDS.filter(w => settings.levels.includes(w.lv) && settings.kinds.includes(w.k));
-  const due = [], fresh = [], future = [];
-  for (const w of pool) {
-    const p = progress[w.id];
-    if (!p || p.stage < 0) fresh.push(w);
-    else if (p.due <= now) due.push(w);
-    else future.push(w);
+  const cand = [];
+  for (const p of PASSAGES) {
+    if (!settings.types.includes(p.type)) continue;
+    const words = QWORDS.filter(w => w.passageId === p.id &&
+      settings.levels.includes(w.lv) && settings.kinds.includes(w.k));
+    if (!words.length) continue;
+    let due = 0, fresh = 0;
+    for (const w of words) {
+      const pr = progress[w.id];
+      if (!pr || pr.stage < 0) fresh++;
+      else if (pr.due <= now) due++;
+    }
+    cand.push({ words, due, fresh });
   }
-  // 復習期限が来ているものを最優先 → 新規 → 期限前（期限が近い順）
-  shuffle(due); shuffle(fresh);
-  future.sort((a, b) => progress[a.id].due - progress[b.id].due);
-  return due.concat(fresh, future).slice(0, settings.count);
+  shuffle(cand);
+  cand.sort((a, b) => (b.due - a.due) || (b.fresh - a.fresh));
+  const out = [];
+  for (const c of cand) {
+    const ws = c.words.slice();
+    shuffle(ws); // 場面の中では順不同
+    for (const w of ws) {
+      out.push(w);
+      if (out.length >= settings.count) return out;
+    }
+  }
+  return out;
 }
 
 function shuffle(a) {
@@ -481,11 +521,12 @@ function readSettings() {
   const levels = [...document.querySelectorAll("#levelChips input:checked")]
     .flatMap(i => i.value.split(",").map(Number));
   const kinds = [...document.querySelectorAll("#kindChips input:checked")].map(i => i.value);
+  const types = [...document.querySelectorAll("#typeChips input:checked")].map(i => i.value);
   const mode = document.querySelector("#modeChips input:checked").value;
   const count = +document.querySelector("#countChips input:checked").value;
   const timeout = +document.querySelector("#timeoutChips input:checked").value * 1000;
   return {
-    levels, kinds, mode, count, timeout,
+    levels, kinds, types, mode, count, timeout,
     speakQ: $("optSpeak").checked, auto: $("optAuto").checked,
     showSyn: $("optSyn").checked, showIpa: $("optIpa").checked,
   };
@@ -498,6 +539,7 @@ function restoreSettings() {
   document.querySelectorAll("#levelChips input").forEach(i =>
     i.checked = i.value.split(",").some(v => (s.levels || []).includes(+v)));
   document.querySelectorAll("#kindChips input").forEach(i => i.checked = s.kinds.includes(i.value));
+  if (s.types) document.querySelectorAll("#typeChips input").forEach(i => i.checked = s.types.includes(i.value));
   document.querySelectorAll("#modeChips input").forEach(i => i.checked = i.value === s.mode);
   document.querySelectorAll("#countChips input").forEach(i => i.checked = +i.value === s.count);
   if (s.timeout) document.querySelectorAll("#timeoutChips input").forEach(i => i.checked = +i.value * 1000 === s.timeout);
@@ -511,7 +553,7 @@ function restoreSettings() {
 function renderStats() {
   const now = Date.now();
   let learned = 0, dueCount = 0, right = 0, wrong = 0;
-  for (const w of WORDS) {
+  for (const w of QWORDS) {
     const p = progress[w.id];
     if (!p || p.stage < 0) continue;
     learned++;
@@ -613,7 +655,7 @@ function startWrongQuiz() {
   persistSettings(settings);
   const dir = questionDir(settings);
   const wrongKey = dir === "e2j" ? "wrongE2J" : "wrongJ2E";
-  const words = WORDS.filter(w => progress[w.id] && progress[w.id][wrongKey] > 0);
+  const words = QWORDS.filter(w => progress[w.id] && progress[w.id][wrongKey] > 0);
   if (!words.length) { alert("間違えた問題がありません（" + (dir === "e2j" ? "英→和" : "和→英") + "）"); return; }
   ensureAudio();
   shuffle(words);
@@ -701,26 +743,31 @@ function tokenMatches(exTok, tgtTok) {
 // visibility切り替えだけで表示するため、正誤判定の前後でレイアウトが一切動かない。
 // e2j: 英文はそのまま見せてよいが、和訳(ex-ja)だけが答えのヒントになるのでspoiler化
 // j2e: 英語自体が答えになるため、例文全体をspoiler化
-// 文中の出題語（活用形を含む）を cls つきの <b> で囲んだHTMLを返す
-function highlightTarget(ex, targetEn, cls) {
-  const tgt = targetEn.split(/\s+/);
+// 文中の出題語（活用形を含む）を cls つきの <b> で囲んだHTMLを返す。
+// 複数語をまとめて渡せる（1文に複数の出題語があっても一度で処理する。
+// HTML化した文字列に再度かけると壊れるため、必ず元の文に対して一度だけ呼ぶ）
+function highlightTargets(ex, targetEns, cls) {
   const re = /[A-Za-z']+/g;
   const toks = [];
   let m;
   while ((m = re.exec(ex))) toks.push({ text: m[0], start: m.index, end: m.index + m[0].length });
-  // 各位置を起点に、間に2語まで挟みつつ（"pick you up" 等）出題語の並びを探す
-  let matched = null;
-  for (let i = 0; i < toks.length && !matched; i++) {
-    let ti = 0, gaps = 0;
-    const picks = [];
-    for (let j = i; j < toks.length && ti < tgt.length; j++) {
-      if (tokenMatches(toks[j].text, tgt[ti])) { picks.push(j); ti++; gaps = 0; }
-      else if (picks.length) { if (++gaps > 2) break; }
-      else break;
+  const hl = new Set();
+  for (const targetEn of targetEns) {
+    const tgt = targetEn.split(/\s+/);
+    // 各位置を起点に、間に2語まで挟みつつ（"pick you up" 等）出題語の並びを探す
+    let matched = null;
+    for (let i = 0; i < toks.length && !matched; i++) {
+      let ti = 0, gaps = 0;
+      const picks = [];
+      for (let j = i; j < toks.length && ti < tgt.length; j++) {
+        if (tokenMatches(toks[j].text, tgt[ti])) { picks.push(j); ti++; gaps = 0; }
+        else if (picks.length) { if (++gaps > 2) break; }
+        else break;
+      }
+      if (ti === tgt.length) matched = picks;
     }
-    if (ti === tgt.length) matched = picks;
+    (matched || []).forEach(i => hl.add(i));
   }
-  const hl = new Set(matched || []);
   let out = "", pos = 0;
   toks.forEach((tk, idx) => {
     out += escapeHtml(ex.slice(pos, tk.start));
@@ -729,6 +776,7 @@ function highlightTarget(ex, targetEn, cls) {
   });
   return out + escapeHtml(ex.slice(pos));
 }
+function highlightTarget(ex, targetEn, cls) { return highlightTargets(ex, [targetEn], cls); }
 
 function exampleHtml(w, dir) {
   if (!w.ex) return "";
@@ -1007,7 +1055,7 @@ function wrongListSection(dir, title) {
   const wrongKey = dir === "e2j" ? "wrongE2J" : "wrongJ2E";
   const rightKey = dir === "e2j" ? "rightE2J" : "rightJ2E";
   const lastWrongKey = dir === "e2j" ? "lastWrongE2J" : "lastWrongJ2E";
-  const items = WORDS
+  const items = QWORDS
     .map(w => ({ w, p: progress[w.id] }))
     .filter(x => x.p && x.p[wrongKey] > 0)
     .sort((a, b) => wrongSortMode === "recent"
@@ -1057,106 +1105,11 @@ function renderRankGraph(dir) {
     `<polyline points="${pts}" fill="none" class="rg-line"/>${dots}</svg>`;
 }
 
-// ===== 間違えた語を使った短い文章＋イラスト（結果画面の下部） =====
-// 文章は端末内で組み立てる（無料で使える外部の文章生成APIはBot対策で呼べないため）。
-// 各語には日常会話の例文が用意してあるので、短いものから数文だけつなげて「ごく短い文章」にする。
-// イラストはその文章をもとにWebから取得する。
-const REVIEW_MAX_SENTENCES = 3;
+// ===== 間違えた語が出てきた場面の表示＋イラスト（結果画面の下部） =====
+// 出題は場面単位なので、間違えた語は同じ場面に集まりやすい。その場面を丸ごと見せ、
+// 間違えた語に下線を引く。文章はもともと1つの場面として書かれているので話がつながっている。
+// イラストはその場面の英文をもとにWebから取得する。
 
-// 接続表現のあとでも大文字のままにする語（一人称と固有名詞）
-const KEEP_CAPS = new Set(["i", "english", "kyoto", "monday"]);
-// 同じ主語で続く文につける接続表現。主語が変わる文は無理につなげず別ブロックに分ける
-const SAME_SUBJ_LINKS = [null, { en: "And ", ja: "そして" }, { en: "In the end, ", ja: "最後に" }];
-
-// 例文の主語（文頭の語）。同じ人物の話かどうかの判定に使う
-function subjectKey(w) {
-  const f = (w.ex.match(/^([A-Za-z][A-Za-z']*)/) || [, ""])[1].toLowerCase();
-  return f.startsWith("i'") ? "i" : f;
-}
-
-// 内容語の判定用。主語が同じでも中身が無関係なら1つの文章にはつなげない
-const TOPIC_STOPWORDS = new Set([
-  "the","a","an","is","are","was","were","be","been","being","to","of","in","on","at","for","with",
-  "and","but","or","it","this","that","he","she","they","we","you","his","her","their","my","your",
-  "not","no","do","does","did","will","can","could","would","should","have","has","had","as","by",
-  "from","up","down","out","about","new","one","all","very","so","too","there","when","what","how",
-]);
-function contentWords(s) {
-  return new Set(normEn(s).split(" ").filter(x => x.length >= 3 && !TOPIC_STOPWORDS.has(x)));
-}
-// 2つの例文が同じ話題を扱っているか（共通の内容語があるか）
-function sharesTopic(a, b) {
-  const A = contentWords(a.ex), B = contentWords(b.ex);
-  for (const x of A) if (B.has(x)) return true;
-  return false;
-}
-
-// 接続表現の後ろに続けられるよう文頭を小文字にする（固有名詞・I はそのまま）
-function decapitalizeFirstWord(html) {
-  const m = html.match(/^((?:<[^>]+>)*)([A-Za-z][A-Za-z']*)/);
-  if (!m) return html;
-  const w = m[2];
-  if (w.length >= 2 && w === w.toUpperCase()) return html;      // TV などの略語（冠詞 "A" は除く）
-  if (w.startsWith("I'") || KEEP_CAPS.has(w.toLowerCase())) return html;
-  return m[1] + w.charAt(0).toLowerCase() + w.slice(1) + html.slice(m[0].length);
-}
-
-// 主語が同じ例文どうしを優先して選ぶ。同じ人物の話が続くので、並べたときに
-// 文どうしが場面としてつながって読める
-function pickCoherentWords(cands, max) {
-  const byLen = arr => arr.slice().sort((a, b) => a.ex.length - b.ex.length);
-  // 主語も話題も共通していて「1つの文章としてつなげられる」組があれば優先して選ぶ
-  let best = [];
-  for (const seed of cands) {
-    const cluster = [seed].concat(
-      cands.filter(w => w !== seed && subjectKey(w) === subjectKey(seed) && sharesTopic(seed, w)));
-    if (cluster.length > best.length) best = cluster;
-  }
-  const picked = best.length >= 2 ? byLen(best).slice(0, max) : [];
-  // つなげられる組がなければ（あっても足りなければ）短い例文から補う
-  for (const w of byLen(cands)) {
-    if (picked.length >= max) break;
-    if (!picked.includes(w)) picked.push(w);
-  }
-  return picked;
-}
-
-// 選んだ例文をブロックに分ける。主語が同じ文は1つのまとまりとして接続表現でつなぎ、
-// 主語が変わる文は無理に1つの文章にせず、別ブロックとして区切って見せる
-function buildReviewPassage(words) {
-  const cands = words.filter(w => w.ex);
-  if (!cands.length) return null;
-  const picked = pickCoherentWords(cands, REVIEW_MAX_SENTENCES);
-
-  // 主語が同じでも中身が無関係な例文をつなぐと「話がつながっていない」文章になるため、
-  // 同じ主語かつ共通の話題がある場合だけ1つの文章にまとめ、それ以外は別ブロックにする
-  const groups = [];
-  for (const w of picked) {
-    const last = groups[groups.length - 1];
-    const prev = last && last[last.length - 1];
-    if (prev && subjectKey(prev) === subjectKey(w) && sharesTopic(prev, w)) last.push(w);
-    else groups.push([w]);
-  }
-
-  const blocks = groups.map(group => {
-    const htmlParts = [], jaParts = [];
-    group.forEach((w, i) => {
-      const link = i > 0 ? SAME_SUBJ_LINKS[Math.min(i, SAME_SUBJ_LINKS.length - 1)] : null;
-      let s = highlightTarget(w.ex, w.en, "rp-hl");
-      if (link) s = link.en + decapitalizeFirstWord(s);
-      htmlParts.push(s);
-      if (w.exJa) jaParts.push(link ? link.ja + w.exJa : w.exJa);
-    });
-    return { html: htmlParts.join(" "), ja: jaParts.join(" ") };
-  });
-
-  return {
-    blocks,
-    plain: picked.map(w => w.ex).join(" "),
-    used: picked.length,
-    total: words.length,
-  };
-}
 
 function hashSeed(s) {
   let h = 0;
@@ -1213,17 +1166,35 @@ function loadReviewImage(prompt, fallbackQuery) {
 
 function renderReviewSection(words) {
   const card = $("reviewPassageCard");
-  const p = buildReviewPassage(words);
-  if (!p) { card.classList.add("hidden"); return; }
+  // 間違えた語を場面ごとにまとめる（同じ場面の語は1つの文章として見せられる）
+  const byPassage = new Map();
+  for (const w of words) {
+    if (!w.passageId || !PASSAGE_BY_ID[w.passageId]) continue;
+    if (!byPassage.has(w.passageId)) byPassage.set(w.passageId, []);
+    byPassage.get(w.passageId).push(w);
+  }
+  if (!byPassage.size) { card.classList.add("hidden"); return; }
   card.classList.remove("hidden");
-  // 主語が違って1つの文章にまとめられない分は、区切り線つきの別ブロックとして表示する
-  $("reviewPassage").innerHTML = p.blocks.map(b =>
-    `<div class="rp-block"><p class="rp-text">${b.html}</p>` +
-    (b.ja ? `<p class="rp-ja">${escapeHtml(b.ja)}</p>` : "") + `</div>`
-  ).join("");
-  $("reviewPassageNote").textContent =
-    p.total > p.used ? `※ 間違えた${p.total}語のうち、下線の${p.used}語を使った文章です` : "";
-  loadReviewImage(p.plain, words[0] ? words[0].en : "");
+
+  const blocks = [];
+  let firstPlain = "";
+  for (const [pid, ws] of byPassage) {
+    const p = PASSAGE_BY_ID[pid];
+    const lines = p.lines.map((ln, i) => {
+      const here = ws.filter(w => w.line === i).map(w => w.en);
+      // 1行に複数の間違えた語があってもまとめて下線を引く（元の文に一度だけ適用する）
+      const enHtml = here.length ? highlightTargets(ln.en, here, "rp-hl") : escapeHtml(ln.en);
+      const sp = ln.sp ? `<span class="rp-sp">${escapeHtml(ln.sp)}: </span>` : "";
+      return `<p class="rp-text">${sp}${enHtml}</p><p class="rp-ja">${escapeHtml(ln.ja)}</p>`;
+    }).join("");
+    const src = p.source ? `｜出典 ${escapeHtml(new URL(p.source).host)}` : "";
+    const head = `<p class="rp-title">${p.type === "news" ? "📰" : "💬"} ${escapeHtml(p.title)}${src}</p>`;
+    blocks.push(`<div class="rp-block">${head}${lines}</div>`);
+    if (!firstPlain) firstPlain = p.lines.map(l => l.en).join(" ");
+  }
+  $("reviewPassage").innerHTML = blocks.join("");
+  $("reviewPassageNote").textContent = "※ 下線が今回間違えた語です";
+  loadReviewImage(firstPlain, words[0] ? words[0].en : "");
 }
 
 function renderResult() {

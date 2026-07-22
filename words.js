@@ -207,6 +207,16 @@ const WORDS = [
   { en: "make out", pos: "熟", ja: ["理解する", "見分ける", "わかる"], ex: "I couldn't make out what he said.", exJa: "彼の言ったことが理解できなかった。", syn: ["discern", "understand"], etym: [["make", "作る"], ["out", "理解して・判読して"]], lv: 5, k: "i" },
   { en: "rule out", pos: "熟", ja: ["除外", "排除", "じょがい"], ex: "We can't rule out that possibility.", exJa: "その可能性は除外できない。", syn: ["exclude", "eliminate"], etym: [["rule", "定める・裁定する"], ["out", "除外して"]], lv: 5, k: "i" },
   { en: "stand for", pos: "熟", ja: ["表す", "意味する", "あらわす", "我慢"], ex: "What does AI stand for?", exJa: "AIは何を表していますか。", syn: ["represent", "symbolize"], etym: [["stand", "立つ"], ["for", "〜を代表して"]], lv: 5, k: "i" },
+
+  // ===== 場面(passages.js)の追加にともなって足した語 =====
+  { en: "offer", pos: "名", ipa: "/ˈɔːfər/", ja: ["申し出", "提案", "オファー", "もうしで"], ex: "She turned down the offer.", exJa: "彼女はその申し出を断った。", syn: ["proposal", "suggestion"], etym: [["of-", "〜に向かって(ob-)"], ["fer", "運ぶ(ferreに由来)"]], lv: 2, k: "w" },
+  { en: "decision", pos: "名", ipa: "/dɪˈsɪʒn/", ja: ["決断", "決定", "けつだん"], ex: "That was a hard decision.", exJa: "それは難しい決断だった。", syn: ["choice", "conclusion"], etym: [["de-", "切り離して"], ["cis", "切る(caedereに由来)"], ["-ion", "〜すること"]], lv: 3, k: "w" },
+  { en: "regret", pos: "動", ipa: "/rɪˈɡret/", ja: ["後悔", "悔やむ", "残念に思う", "こうかい"], ex: "I don't regret it at all.", exJa: "全然後悔していない。", syn: ["be sorry for"], etym: [["re-", "再び"], ["gret", "嘆く(古ノルド語grátaに由来)"]], lv: 3, k: "w" },
+  { en: "proud", pos: "形", ipa: "/praʊd/", ja: ["誇りに思う", "誇らしい", "ほこり"], ex: "They were proud of their team.", exJa: "彼らは自分のチームを誇りに思った。", syn: ["honored"], lv: 2, k: "w" },
+  { en: "defeat", pos: "動", ipa: "/dɪˈfiːt/", ja: ["負かす", "破る", "敗北", "やぶる"], ex: "Spain defeated Argentina.", exJa: "スペインがアルゼンチンを破った。", syn: ["beat", "overcome"], etym: [["de-", "打ち消し(dis-)"], ["feat", "なす(facereに由来)"]], lv: 3, k: "w" },
+  { en: "effort", pos: "名", ipa: "/ˈefərt/", ja: ["努力", "骨折り", "どりょく"], ex: "They achieved it after years of effort.", exJa: "長年の努力の末に成し遂げた。", syn: ["attempt", "endeavor"], etym: [["ef-", "外へ(ex-)"], ["fort", "力(fortisに由来)"]], lv: 3, k: "w" },
+  { en: "announce", pos: "動", ipa: "/əˈnaʊns/", ja: ["発表", "知らせる", "公表", "はっぴょう"], ex: "The city announced the results.", exJa: "市は結果を発表した。", syn: ["declare", "report"], etym: [["an-", "〜へ(ad-)"], ["nounce", "告げる(nuntiareに由来)"]], lv: 3, k: "w" },
+  { en: "according to", pos: "熟", ja: ["によると", "に従って", "に応じて"], ex: "According to the report, prices rose.", exJa: "報告によると、物価は上がった。", syn: ["based on"], etym: [["according", "一致して"], ["to", "〜に"]], lv: 3, k: "i" },
 ];
 
 // 各エントリに一意IDを付与（en + 種別）

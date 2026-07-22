@@ -38,6 +38,15 @@
     <p class="hint">Lv1 中学 ／ Lv2 高校 ／ Lv3 大学受験 ／ Lv4 上級</p>
   </div>
 
+  <div class="card">
+    <h2>例文タイプ</h2>
+    <div class="chips" id="typeChips">
+      <label class="chip"><input type="checkbox" value="talk" checked><span>💬 会話</span></label>
+      <label class="chip"><input type="checkbox" value="news" checked><span>📰 ニュース</span></label>
+    </div>
+    <p class="hint" id="typeHint">問題は場面（会話・ニュース）ごとにまとめて出題されます</p>
+  </div>
+
   <div class="half-row">
     <div class="card">
       <h2>出題形式</h2>
@@ -167,7 +176,7 @@
   <div class="card hidden" id="rankGraphCard"><h2 id="rankGraphTitle">ランク推移</h2><div id="rankGraph"></div></div>
   <div class="card"><h2>間違えた問題</h2><div id="resultWrong"></div></div>
   <div class="card hidden" id="reviewPassageCard">
-    <h2>間違えた語を使った文章</h2>
+    <h2>間違えた語が出てきた場面</h2>
     <div id="reviewPassage"></div>
     <p id="reviewPassageNote" class="rp-note"></p>
     <div id="reviewImageWrap" class="rp-img-wrap hidden">
@@ -181,6 +190,7 @@
 
 <script src="lib/kuromoji/kuromoji.js"></script>
 <script src="words.js"></script>
+<script src="passages.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

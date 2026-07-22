@@ -1,7 +1,7 @@
 // オフラインキャッシュ（音声認識自体はオンライン必須）
-const CACHE = "voicevocab-v18";
+const CACHE = "voicevocab-v19";
 const ASSETS = [
-  "./", "./index.html", "./style.css", "./app.js", "./words.js", "./manifest.json", "./icon.svg",
+  "./", "./index.html", "./style.css", "./app.js", "./words.js", "./passages.js", "./manifest.json", "./icon.svg",
   "./lib/kuromoji/kuromoji.js",
 ];
 // 同音異義語判定用の辞書データ(約17MB)。初回インストールを遅くしないよう
