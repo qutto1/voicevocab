@@ -63,6 +63,9 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 .start-row { display: flex; gap: 10px; margin-top: 8px; }
 .start-row .big-btn { margin-top: 0; }
 .big-btn.alt { background: #475467; color: var(--text); }
+/* 「スタート＜間違えた問題のみ＞」の2行目は小さく添える */
+#setup .start-row .big-btn { padding-top: 13px; padding-bottom: 13px; line-height: 1.25; }
+.btn-sub { display: block; font-size: 12px; font-weight: 600; opacity: .85; margin-top: 3px; }
 
 /* 出題形式と種類、問題数と待ち時間などを横に並べる行 */
 .half-row { display: flex; gap: 12px; margin-bottom: 14px; }
@@ -276,7 +279,7 @@ h1 { font-size: 26px; text-align: center; margin-bottom: 4px; }
 .result-actions { margin-bottom: 16px; }
 /* .big-btn は width:100% なので、横並びでは幅を内容に合わせ直す */
 .result-actions .big-btn { width: auto; white-space: nowrap; }
-.result-actions #backBtn { flex: 0 0 auto; padding-left: 28px; padding-right: 28px; }
+.result-actions #backBtn { flex: 0 0 auto; padding-left: 52px; padding-right: 52px; }
 .result-actions #retryWrongBtn { flex: 1; }
 
 /* ランク推移は折りたたんで表示（既定は閉じた状態） */

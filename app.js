@@ -3,7 +3,7 @@
 
 "use strict";
 
-const APP_VERSION = "v23";
+const APP_VERSION = "v24";
 
 // ===== 間隔反復（忘却曲線） =====
 // stage n で正解 → 次回出題は INTERVALS_DAYS[n] 日後。不正解 → stage 0 に戻し10分後に再出題対象。
