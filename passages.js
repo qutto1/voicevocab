@@ -433,42 +433,6 @@ const PASSAGES = [
     ],
   },
   {
-    id: "n2026-07-21-02", type: "news", title: "月面着陸に大型契約",
-    source: "https://www.sciencedaily.com/", fetchedAt: "2026-07-22",
-    lines: [
-      { en: "NASA will pay almost 600 million dollars for four Moon landings.", ja: "NASAは4回の月面着陸に約6億ドルを支払う。" },
-      { en: "The flights are planned for late 2028, not tomorrow.", ja: "飛行は明日ではなく2028年後半に予定されている。" },
-      { en: "Companies must build landers that can carry heavy equipment.", ja: "各社は重い機材を運べる着陸船を作らなければならない。" },
-      { en: "Engineers will arrive at the test site next month.", ja: "技術者たちは来月、試験場に到着する。" },
-      { en: "They decided to test the engines together before the launch.", ja: "彼らは打ち上げ前にエンジンを一緒に試験することにした。" },
-    ],
-    targets: [
-      { en: "heavy", k: "w", line: 2 },
-      { en: "arrive", k: "w", line: 3 },
-      { en: "decide", k: "w", line: 4 },
-      { en: "together", k: "w", line: 4 },
-      { en: "tomorrow", k: "w", line: 1 },
-    ],
-  },
-  {
-    id: "n2026-07-21-03", type: "news", title: "睡眠障害の原因に免疫細胞",
-    source: "https://www.sciencedaily.com/", fetchedAt: "2026-07-22",
-    lines: [
-      { en: "New knowledge explains the cause of sleep loss in Alzheimer's disease.", ja: "新しい知見がアルツハイマー病における睡眠障害の原因を説明している。" },
-      { en: "Doctors now realize that the brain's own immune cells are responsible.", ja: "医師たちは今、脳自身の免疫細胞が原因だと気づいている。" },
-      { en: "The team will compare healthy brains with affected ones.", ja: "チームは健康な脳と影響を受けた脳を比較する。" },
-      { en: "Doctors say patients should avoid long naps in the afternoon.", ja: "医師は患者が午後の長い昼寝を避けるべきだと言う。" },
-      { en: "They hope to protect memory in older people.", ja: "彼らは高齢者の記憶を守りたいと考えている。" },
-    ],
-    targets: [
-      { en: "compare", k: "w", line: 2 },
-      { en: "avoid", k: "w", line: 3 },
-      { en: "protect", k: "w", line: 4 },
-      { en: "knowledge", k: "w", line: 0 },
-      { en: "realize", k: "w", line: 1 },
-    ],
-  },
-  {
     id: "n2026-07-22-03", type: "news", title: "全固体電池の弱点を解明",
     source: "https://www.sciencedaily.com/", fetchedAt: "2026-07-22",
     lines: [
@@ -540,6 +504,42 @@ const PASSAGES = [
       { en: "look up to", k: "i", line: 2 },
       { en: "be good at", k: "i", line: 3 },
       { en: "predict", k: "w", line: 4 },
+    ],
+  },
+  {
+    id: "n2026-07-24-01", type: "news", title: "NASAが月着陸へ軌道上リハーサル",
+    source: "https://www.nasa.gov/directorates/esdmd/artemis-campaign-development-division/human-landing-system-program/how-nasas-artemis-iii-lander-test-will-pave-way-for-moon-landings/", fetchedAt: "2026-07-24",
+    lines: [
+      { en: "NASA is preparing an important rehearsal in space before astronauts try to land on the Moon again in the Artemis III mission.", ja: "NASAは、アルテミスIII計画で宇宙飛行士が再び月面着陸に挑む前に、宇宙空間での重要なリハーサルを準備している。" },
+      { en: "Four astronauts will fly the Orion capsule into orbit and go through practice dockings with two different landers.", ja: "4人の宇宙飛行士がオリオン宇宙船で軌道に上がり、2種類の異なる着陸船とのドッキング練習を行う。" },
+      { en: "Engineers say this rehearsal is significant because it has never been attempted in quite this way before.", ja: "技術者たちは、これほどの形での試みはこれまでなかったため、このリハーサルは重要な意味を持つと述べている。" },
+      { en: "The tests aim to create confidence that everything will work when Artemis III tries to land on the Moon in 2027.", ja: "この試験は、2027年にアルテミスIIIが月面着陸を試みる際にすべてがうまくいくという確信を生み出すことを目指している。" },
+      { en: "Astronauts say the mission will give them valuable experience working with new spacecraft in orbit.", ja: "宇宙飛行士たちは、この任務によって軌道上で新しい宇宙船を扱う貴重な経験が得られると話している。" },
+    ],
+    targets: [
+      { en: "important", k: "w", line: 0 },
+      { en: "go through", k: "i", line: 1 },
+      { en: "significant", k: "w", line: 2 },
+      { en: "create", k: "w", line: 3 },
+      { en: "experience", k: "w", line: 4 },
+    ],
+  },
+  {
+    id: "n2026-07-24-02", type: "news", title: "コモンウェルスゲームズ、グラスゴーで開幕",
+    source: "https://en.wikipedia.org/wiki/2026_Commonwealth_Games", fetchedAt: "2026-07-24",
+    lines: [
+      { en: "The 2026 Commonwealth Games began in Glasgow, Scotland, and will continue until early August.", ja: "2026年コモンウェルスゲームズはスコットランドのグラスゴーで開幕し、8月上旬まで続く。" },
+      { en: "About three thousand athletes from more than seventy nations will compete in eleven sports.", ja: "70以上の国と地域からおよそ3000人の選手が11種目で競い合う。" },
+      { en: "The opening ceremony took place in a bright arena called the Hydro on the first night.", ja: "開会式は初日の夜、ハイドロという名の明るいアリーナで行われた。" },
+      { en: "Because Glasgow hosted the games before, organizers did not require many expensive new stadiums this time.", ja: "グラスゴーは以前にも大会を開催したことがあるため、今回は高額な新しいスタジアムをあまり必要としなかった。" },
+      { en: "City leaders hope the event will provide a big boost to local business and tourism.", ja: "市の指導者たちは、この大会が地元の商業と観光に大きな後押しを与えることを期待している。" },
+    ],
+    targets: [
+      { en: "continue", k: "w", line: 0 },
+      { en: "bright", k: "w", line: 2 },
+      { en: "require", k: "w", line: 3 },
+      { en: "expensive", k: "w", line: 3 },
+      { en: "provide", k: "w", line: 4 },
     ],
   },
 ];
